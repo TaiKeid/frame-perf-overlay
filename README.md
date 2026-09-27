@@ -180,7 +180,7 @@ Some values were checked against another source on a Steam Frame; others are est
 
 - This is an unofficial project. It is not affiliated with, endorsed by, or sponsored by Valve Corporation. Steam, Steam Frame, SteamVR and Steam Link are trademarks and/or registered trademarks of Valve Corporation in the U.S. and/or other countries. The names are used here only to say what this works with.
 - Use at your own risk. The software comes with no warranty (see [LICENSE](LICENSE)). **The author is not responsible for any damage from using it, including damage to your headset or your Steam account.**
-- It was made with an AI assistant (Claude). The author reviewed it and tested it on their own Steam Frame, but can't guarantee how it behaves on yours, so please read the code yourself before running it.
+- It was made with an AI assistant (Claude). The author has not reviewed the code and has only tested that it works on their own Steam Frame. It may not behave the same on yours, so please read the code yourself before running it.
 - What it does on your headset:
   - It only **reads** from sysfs and `/proc` (sensors, CPU, memory, and the GPU time the kernel reports for your own processes). It never writes there, and it doesn't touch fans, clocks, power settings or cameras. To pick the default language it also reads the `language` line of Steam's `~/.steam/registry.vdf` once at startup (read only).
   - It writes only: its own settings file; the files `install.sh` puts under `~/.local` and the service file under `~/.config/systemd/user`; and, when you use the **Autostart** switch, `systemctl --user enable` / `disable` for its own service.
