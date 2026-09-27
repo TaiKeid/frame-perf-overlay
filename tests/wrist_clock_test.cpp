@@ -129,18 +129,30 @@ void configuration(const std::string& file) {
     CHECK(c.attachment == Attachment::Head && !c.visible); near(c.posX, 0.2); CHECK(c.clockFormat == 24);
     CHECK(applySettingsAction(SettingsAction::AttachLeft, c));
     CHECK(applySettingsAction(SettingsAction::OffsetXUp, c));
-    CHECK(applySettingsAction(SettingsAction::PitchDown, c));
+    CHECK(applySettingsAction(SettingsAction::WristPitchDown, c));
     const WristPose left = c.leftWrist;
     CHECK(applySettingsAction(SettingsAction::AttachRight, c));
     CHECK(applySettingsAction(SettingsAction::OffsetYDown, c));
     CHECK(applySettingsAction(SettingsAction::YawUp, c));
     CHECK(!(c.leftWrist != left)); near(c.posX, 0.2);
+    // Head rotation and wrist rotation must remain independent after the merge.
+    const WristPose right = c.rightWrist;
+    CHECK(applySettingsAction(SettingsAction::PitchUp, c, 5));
+    CHECK(applySettingsAction(SettingsAction::YawRight, c, 5));
+    CHECK(applySettingsAction(SettingsAction::RollLeft, c));
+    near(c.pitchDeg, 5); near(c.yawDeg, 5); near(c.rollDeg, 1);
+    CHECK(!(c.rightWrist != right));
+    CHECK(applySettingsAction(SettingsAction::WristPitchUp, c));
+    near(c.rightWrist.pitch, right.pitch + 5); near(c.pitchDeg, 5);
+    c.updateCheck = false;
     c.clockFormat = 12; c.wristFade = false; c.wristFadeEndDeg = 80;
     CHECK(saveConfig(file, c, error));
     Config roundTrip; warnings.clear(); CHECK(loadConfig(file, roundTrip, warnings, error)); CHECK(warnings.empty());
     CHECK(roundTrip.attachment == Attachment::RightWrist && roundTrip.clockFormat == 12);
     CHECK(!(roundTrip.leftWrist != c.leftWrist) && !(roundTrip.rightWrist != c.rightWrist));
     CHECK(!roundTrip.wristFade); near(roundTrip.wristFadeEndDeg, 80);
+    CHECK(!roundTrip.updateCheck);
+    near(roundTrip.pitchDeg, 5); near(roundTrip.yawDeg, 5); near(roundTrip.rollDeg, 1);
     near(roundTrip.posZ, -0.7);
     { std::ofstream out(file); out << R"({"attachment":"bad","clock_format":12.5,"left_wrist":{"x":9,"pitch":-300},"wrist_fade_end_deg":5})"; }
     warnings.clear(); CHECK(loadConfig(file, c, warnings, error)); CHECK(!warnings.empty());
@@ -155,35 +167,53 @@ void configuration(const std::string& file) {
     CHECK(!loadConfig(file, c, warnings, error)); CHECK(!(before != c.leftWrist));
     resetDisplaySettings(c); CHECK(c.attachment == Attachment::Head && c.clockFormat == 24);
     near(c.leftWrist.pitch, -90);
+    near(c.pitchDeg, 0); near(c.yawDeg, 0); near(c.rollDeg, 0);
 }
 
 void controls(const std::string& directory) {
     Config c; c.language = Language::En;
     FontSet fonts; fonts.load(c.fontPath, c.boldFontPath);
     SettingsPanel panel(fonts); AutostartStatus service{AutostartStatus::State::Enabled, false, false};
-    panel.render(c, service);
-    CHECK(panel.pointerDown(650, 40, 0) == SettingsAction::None); // Change page internally.
-    panel.render(c, service);
-    CHECK(panel.pointerDown(240, 285, 1) == SettingsAction::None); // Disabled in head mode.
-    CHECK(panel.pointerDown(260, 180, 2) == SettingsAction::AttachLeft);
-    applySettingsAction(SettingsAction::AttachLeft, c); panel.render(c, service);
+    panel.render(c, service, {});
+    CHECK(panel.pointerDown(1320, 220, 0) == SettingsAction::PitchUp);
+    CHECK(panel.pointerDown(1320, 300, 0) == SettingsAction::PitchDown);
+    CHECK(panel.pointerDown(1260, 395, 0) == SettingsAction::None);
+    near(panel.angleStepDeg(), 1);
+    CHECK(panel.pointerDown(1480, 395, 0) == SettingsAction::None);
+    near(panel.angleStepDeg(), 5);
+    CHECK(panel.pointerDown(1100, 600, 0) == SettingsAction::None); // Change page internally.
+    panel.render(c, service, {});
+    CHECK(panel.pointerDown(240, 325, 1) == SettingsAction::None); // Disabled in head mode.
+    CHECK(panel.pointerDown(260, 220, 2) == SettingsAction::AttachLeft);
+    applySettingsAction(SettingsAction::AttachLeft, c); panel.render(c, service, {});
     const struct {double x, y; SettingsAction action;} buttons[] = {
-        {80,180,SettingsAction::AttachHead},{260,180,SettingsAction::AttachLeft},{430,180,SettingsAction::AttachRight},
-        {240,280,SettingsAction::OffsetXDown},{440,280,SettingsAction::OffsetXUp},
-        {240,360,SettingsAction::OffsetYDown},{440,360,SettingsAction::OffsetYUp},
-        {240,440,SettingsAction::OffsetZDown},{440,440,SettingsAction::OffsetZUp},
-        {650,305,SettingsAction::PitchDown},{745,305,SettingsAction::PitchUp},
-        {825,305,SettingsAction::YawDown},{925,305,SettingsAction::YawUp},
-        {1000,305,SettingsAction::RollDown},{1100,305,SettingsAction::RollUp},
-        {780,135,SettingsAction::ClockOff},{920,135,SettingsAction::Clock12},{1060,135,SettingsAction::Clock24},
-        {900,390,SettingsAction::FadeOn},{1040,390,SettingsAction::FadeOff},
-        {850,460,SettingsAction::FadeAngleDown},{1100,460,SettingsAction::FadeAngleUp}
+        {80,220,SettingsAction::AttachHead},{260,220,SettingsAction::AttachLeft},{430,220,SettingsAction::AttachRight},
+        {240,320,SettingsAction::OffsetXDown},{440,320,SettingsAction::OffsetXUp},
+        {240,400,SettingsAction::OffsetYDown},{440,400,SettingsAction::OffsetYUp},
+        {240,480,SettingsAction::OffsetZDown},{440,480,SettingsAction::OffsetZUp},
+        {650,345,SettingsAction::WristPitchDown},{745,345,SettingsAction::WristPitchUp},
+        {825,345,SettingsAction::YawDown},{925,345,SettingsAction::YawUp},
+        {1000,345,SettingsAction::RollDown},{1100,345,SettingsAction::RollUp},
+        {780,175,SettingsAction::ClockOff},{920,175,SettingsAction::Clock12},{1060,175,SettingsAction::Clock24},
+        {900,430,SettingsAction::FadeOn},{1040,430,SettingsAction::FadeOff},
+        {850,500,SettingsAction::FadeAngleDown},{1100,500,SettingsAction::FadeAngleUp}
     };
     for (const auto& b : buttons) CHECK(panel.pointerDown(b.x,b.y,3) == b.action);
-    panel.pointerLeave(); panel.render(c, service); CHECK(panel.writePng(directory + "/wrist-en.png"));
-    c.language = Language::Ja; panel.render(c, service); CHECK(panel.writePng(directory + "/wrist-ja.png"));
-    panel.pointerDown(650,40,4); panel.render(c,service);
-    CHECK(panel.pointerDown(240,180,5) == SettingsAction::ShowOn); // Old controls restored.
+    // The shared update bar must not intercept the wrist-page button or clock controls.
+    frame_updater::UpdateStatus update;
+    update.state = frame_updater::UpdateState::Available;
+    update.current = "0.2.0-tai.2"; update.latest = "0.3.0"; update.installable = true;
+    panel.render(c, service, update);
+    CHECK(panel.pointerDown(1060, 175, 3) == SettingsAction::Clock24);
+    panel.armUpdateConfirmForPreview(); panel.render(c, service, update);
+    CHECK(panel.pointerDown(1100, 600, 3) == SettingsAction::None);
+    panel.render(c, service, update);
+    CHECK(panel.pointerDown(1320, 220, 3) == SettingsAction::PitchUp);
+    panel.pointerDown(1100, 600, 3); panel.render(c, service, update);
+    panel.pointerLeave(); panel.render(c, service, {}); CHECK(panel.writePng(directory + "/wrist-en.png"));
+    c.language = Language::Ja; panel.render(c, service, {}); CHECK(panel.writePng(directory + "/wrist-ja.png"));
+    panel.pointerDown(1100,600,4); panel.render(c, service, {});
+    CHECK(panel.pointerDown(240,220,5) == SettingsAction::ShowOn); // Old controls restored.
 }
 int main() {
     char directory[] = "/tmp/frame-overlay-test-XXXXXX";

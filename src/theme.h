@@ -44,6 +44,7 @@ constexpr Color kAccent = hexColor(0xe27dfd);         ///< 選択中・fps / 電
 constexpr Color kAccentPressed = hexColor(0xc45fe0);  ///< 押している間（少し濃く）
 constexpr Color kOnAccent = hexColor(0x0d1117);       ///< アクセント・黄・赤の塗りの上の文字（白は 2.4:1 で不可）
 constexpr double kAccentTintAlpha = 0.20;             ///< アクセントの薄い塗り・光彩
+constexpr Color kAccentText = hexColor(0xf0c4fa);     ///< カードの上のピンクの文字（更新の帯の「新しい版があります」）
 // ---- 2 本目の線（GPU） ----
 constexpr Color kGpu = hexColor(0x58a6ff);            ///< GPU（使用率の塗り・GPU 温度の線・「GPU」の文字）
 constexpr double kGpuFillAlpha = 0.22;                ///< グラフの台の上の GPU 使用率の塗り

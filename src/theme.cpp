@@ -112,6 +112,14 @@ const std::vector<ContrastPair>& contrastPairs() {
         {"設定: 「パネル表示中」の ●", kSuccess, kSuccessTint, ContrastKind::Ui},
         {"設定: 「パネル非表示」の ○", kTextMuted, kControl, ContrastKind::Ui},
         {"設定: 終了ボタンの枠（パネルの地）", kDanger, kBg, ContrastKind::Ui},
+        {"設定: 更新の帯の「新しい版があります」の文字（カード）", kAccentText, kCard, ContrastKind::Text},
+        {"設定: 更新の帯の失敗の文字（カード）", kDanger, kCard, ContrastKind::Text},
+        {"設定: 更新の帯の補足の文字（カード）", kTextMuted, kCard, ContrastKind::Text},
+        {"設定: 更新の帯のピンクの枠（パネルの地）", kAccent, kBg, ContrastKind::Ui},
+        {"設定: 更新の帯のピンクの枠（カード）", kAccent, kCard, ContrastKind::Ui},
+        {"設定: 更新の帯の赤い枠（パネルの地）", kDanger, kBg, ContrastKind::Ui},
+        {"設定: 更新の帯の赤い枠（カード）", kDanger, kCard, ContrastKind::Ui},
+        {"設定: 更新の帯の強調ボタンの文字（アクセントの塗り）", kOnAccent, kAccent, ContrastKind::Text},
     };
     return pairs;
 }

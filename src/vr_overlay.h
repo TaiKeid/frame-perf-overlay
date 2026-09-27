@@ -87,13 +87,20 @@ public:
     void shutdown();
 
     /**
-     * 位置・幅・透明度・表示の有無を性能パネルに反映する。
+     * 位置・向き・幅・透明度・表示の有無を性能パネルに反映する。
      * @param config 反映する設定
      */
     void applyConfig(const Config& config);
     // Poll controller role/pose and animate opacity independently of sensor rendering.
     void updatePlacement(const Config& config, double now);
     bool needsPlacementRetry() const { return placementRetryPending_; }
+
+    /**
+     * --verbose のとき true にする。applyConfig のたびに、少し後の pollEvents で
+     * パネルの向きの確かめ（logFacingCheck）をログに出す。
+     * @param verbose 出すなら true
+     */
+    void setVerbose(bool verbose) { verbose_ = verbose; }
 
     /**
      * たまったイベントを処理する。SteamVR の終了（VREvent_Quit）には AcknowledgeQuit_Exiting で応える。
@@ -183,6 +190,9 @@ private:
     double displayHz_ = 0.0;
     double hzCheckedAt_ = -1.0;
     bool readOnly_ = false;         ///< connectReadOnly でつないだ（オーバーレイも Vulkan もない）
+    bool verbose_ = false;          ///< applyConfig のたびに向きの確かめをログに出す
+    double facingCheckAt_ = 0.0;    ///< 向きの確かめをする時刻（0 なら予定なし）
+    Config facingCheckConfig_;      ///< 向きの確かめに使う設定（最後に applyConfig したもの）
     std::vector<uint8_t> timingBuffer_;  ///< Compositor_FrameTiming の配列用
     std::string lastPanelError_;
     std::string lastSettingsError_;
@@ -198,6 +208,15 @@ private:
      * @param height 設定パネルの高さ（px）
      */
     void createDashboard(int width, int height);
+
+    /**
+     * 診断用（--verbose）: 今の HMD の姿勢から、頭の中心 → パネル上の 3 点（中心・パネル自身の +x 方向に 2cm・
+     * +y 方向に 2cm）へ光線を飛ばし、SteamVR が計算した当たり（ComputeOverlayIntersection の UV・法線・距離）を
+     * ログに出す。法線は HMD 基準に直して、こちらで計算した表の向き R·(0,0,1) と、頭への向き −pos / |pos| との
+     * 内積も出す（1 に近ければ表が頭を向いている）。
+     * @param config 反映した設定
+     */
+    void logFacingCheck(const Config& config) const;
 
     /**
      * /proc を一度だけ走査して vrserver の PID を探す。

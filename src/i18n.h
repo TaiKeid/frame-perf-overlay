@@ -38,7 +38,8 @@ struct UiText {
     const char* maxCoreOpen;    ///< 「（最大コア 」
     const char* maxCoreClose;   ///< 「）」
     const char* direct;         ///< Steam Link の直通回線
-    const char* notConnected;   ///< 直通回線が未接続
+    const char* homeWifi;       ///< 家の Wi-Fi（直通回線に相手がいないとき・どちらにもつながっていないとき）
+    const char* notConnected;   ///< 直通回線にも家の Wi-Fi にもつながっていない
     const char* linkRate;       ///< リンク速度
     const char* battery;        ///< 本体の電池
     const char* leftHand;       ///< 左手のコントローラー
@@ -82,7 +83,42 @@ struct UiText {
     const char* posX;
     const char* posY;
     const char* posZ;
+    const char* cardFacing;     ///< 向きのカードの見出し
+    const char* yawLeft;        ///< 面を左へ向ける
+    const char* yawRight;       ///< 面を右へ向ける
+    const char* pitchUp;        ///< 面を上へ向ける
+    const char* pitchDown;      ///< 面を下へ向ける
+    const char* rollLeft;       ///< 画面内で左に回す（反時計回り）
+    const char* rollRight;      ///< 画面内で右に回す（時計回り）
+    const char* faceMe;         ///< 自分に向ける
+    const char* faceForward;    ///< 正面向き（回転なし）
+    const char* angleStep1;     ///< 向きのボタンを 1° ずつ動かす
+    const char* angleStep5;     ///< 向きのボタンを 5° ずつ動かす
+    const char* facingNow;      ///< いまの向き（後ろに左右・上下・回転が続く）
+    const char* yawName;
+    const char* pitchName;
+    const char* rollName;
     const char* footer;         ///< 変更はすぐ反映される旨
+    // ---- 更新（vendor/frame-updater/strings.md より） ----
+    const char* rowUpdateCheck;          ///< 設定ファイルの説明用（「新しい版の確認」）
+    const char* updateUpToDateFormat;    ///< `UpToDate`（%s は版）
+    const char* updateChecking;          ///< `checking` で、まだ答えがない
+    const char* updateAvailableFormat;   ///< `Available`（%s は版）
+    const char* updateButton;            ///< 「更新する」を押す（確認へ）
+    const char* updateManual;            ///< `installable` が false のときの案内
+    const char* updateReleasePage;       ///< リリースページの URL の前
+    const char* updateConfirmFormat;     ///< 確認の質問（%s は版）
+    const char* updateConfirmHint;       ///< 確認の補足
+    const char* updateConfirmYes;        ///< 確認の実行ボタン
+    const char* updateConfirmNo;         ///< 確認のやめるボタン
+    const char* updateInstallingFormat;  ///< `Installing`（%s は下の手順の文言）
+    const char* updateInstalledFormat;   ///< `Installed`（%s は版）
+    const char* updateInstallFailed;     ///< `InstallFailed` の見出し（理由が続く）
+    const char* updateCheckFailed;       ///< `CheckFailed` の見出し（理由が続く）
+    const char* updateCheckNow;          ///< ［確認］ボタン（strings.md のまま。幅は足りている）
+    const char* updateRetry;             ///< `InstallFailed` のやり直しボタン
+    const char* updateDismiss;           ///< `Installed` / `InstallFailed` を閉じる
+    const char* updateLogHint;           ///< 失敗したときの補足（ログの場所）
 };
 
 /**
@@ -118,6 +154,22 @@ std::string thermalBadgeText(Language language, bool cpu, bool gpu);
  * @return 文言
  */
 std::string batteryStatusText(Language language, const std::string& status, bool chargerOnline);
+
+/**
+ * 更新の手順（`UpdateStatus::step`）を文言にする。知らない手順はそのまま返す。
+ * @param language 言語
+ * @param step "start" / "download" / "verify" / "extract" / "install"
+ * @return 文言
+ */
+std::string updateStepText(Language language, const std::string& step);
+
+/**
+ * 更新のエラーコード（`UpdateStatus::error`）を文言にする。知らないコードは「other」の文言にする。
+ * @param language 言語
+ * @param error frame-update.sh / update_check.h のエラーコード
+ * @return 文言
+ */
+std::string updateErrorText(Language language, const std::string& error);
 
 /**
  * 設定ファイルに書く言語の名前。

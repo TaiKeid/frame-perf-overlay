@@ -8,6 +8,7 @@
 #include "settings_panel.h"
 #include "theme.h"
 #include "sensors.h"
+#include "update_check.h"  // vendor/frame-updater/cpp
 #include "vr_overlay.h"
 
 #include <fcntl.h>
@@ -23,6 +24,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <fstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -66,6 +68,8 @@ struct Options {
     bool previewQuit = false; ///< --dump-settings-png で「もう一度押すと終了」の状態を描く
     bool forceSettingsVisible = false;  ///< 診断用: 設定パネルが見えているものとして 50ms の周期で回す
     std::string previewAutostart;  ///< --dump-settings-png で自動起動をこの状態として描く（enabled / disabled / notinstalled / busy / failed）
+    std::string previewUpdate;  ///< --dump-settings-png で新しい版の確認をこの状態として描く
+                                 ///< （uptodate / available / manual / confirm / installing / installed / checkfailed / installfailed）
     bool fakeFrames = false;
     bool fakeWarnings = false;
     double fakeFps = 0.0;
@@ -174,13 +178,15 @@ void printUsage() {
         "      --fake-frames    フレーム時間とコントローラーにダミーの値を入れる（見た目の確認用）\n"
         "      --fake-warnings  警告色の確認用に、熱で制限中・電波弱・電池少などのダミーの値を入れる\n"
         "      --fake-fps N     fps が落ちたときの見た目用に、アプリの fps をダミーで N 付近にする\n"
-        "      --fake-wifi D    直通回線をダミーにする（D は電波の dBm、none で未接続）\n"
+        "      --fake-wifi D    直通回線をダミーにする（D は電波の dBm、none で未接続。home:D で家の Wi-Fi）\n"
         "      --fake-throttle  SteamVR がアプリを半分に抑えている状態（72Hz で 36 fps、再投影 50%%）をダミーで出す\n"
         "  --dump-settings-png PATH  OpenVR なしで設定パネル（ダッシュボード）の画像を PNG に書き出して終わる\n"
         "      --thumbnail-png PATH  あわせてダッシュボードのサムネイル（ランチャーのアイコンと同じ絵）も書き出す\n"
         "      --thumbnail-size N    そのサムネイルの一辺（既定 256）\n"
         "      --preview-quit   「もう一度押すと終了」の状態で描く\n"
         "      --preview-autostart S  自動起動をこの状態で描く（enabled / disabled / notinstalled / busy / failed）\n"
+        "      --preview-update S     新しい版の確認をこの状態で描く（uptodate / checking / available / manual / confirm /\n"
+        "                             installing / installed / checkfailed / installfailed。既定は uptodate）\n"
         "  --language ja|en     PNG の書き出しで、設定の言語の代わりにこの言語で描く\n"
         "  --config PATH        設定ファイル（既定 ~/.config/frame-perf-overlay/config.json）\n"
         "  --verbose            オーバーレイ中、数秒ごとに値を標準エラーに出す\n"
@@ -238,6 +244,8 @@ bool parseOptions(int argc, char** argv, Options& options) {
             }
         } else if (arg == "--preview-autostart" && hasNext) {
             options.previewAutostart = argv[++i];
+        } else if (arg == "--preview-update" && hasNext) {
+            options.previewUpdate = argv[++i];
         } else if (arg == "--contrast-report") {
             options.mode = Options::Mode::ContrastReport;
         } else if (arg == "--force-settings-visible") {
@@ -286,13 +294,15 @@ void printSample(const SensorSample& s) {
                 fmt(s.exhaustTempC, 1).c_str(), fmt(s.heatsinkTempC, 1).c_str(), s.throttleCpu ? "中" : "なし",
                 s.throttleGpu ? "中" : "なし");
     if (!s.wifi.interfaceUp) {
-        std::printf("  直通   wlanap なし\n");
+        std::printf("  無線   インターフェースなし（直通回線の AP も、家の Wi-Fi の子機も見つからない）\n");
     } else if (!s.wifi.connected) {
-        std::printf("  直通   未接続\n");
+        std::printf("  無線   未接続（直通回線に相手がいない・家の Wi-Fi にもつながっていない）\n");
     } else {
-        std::printf("  直通   受信 %s Mbps  送信 %s Mbps  リンク 送 %s / 受 %s Mbps  電波 %s dBm\n",
-                    fmt(s.wifi.rxMbps, 2).c_str(), fmt(s.wifi.txMbps, 2).c_str(), fmt(s.wifi.txLinkMbps, 1).c_str(),
-                    fmt(s.wifi.rxLinkMbps, 1).c_str(), fmt(s.wifi.signalDbm, 0).c_str());
+        // 直通回線の相手は PC、家の Wi-Fi の相手はつないでいる AP
+        std::printf("  %s 受信 %s Mbps  送信 %s Mbps  リンク 送 %s / 受 %s Mbps  電波 %s dBm\n",
+                    s.wifi.homeWifi ? "Wi-Fi " : "直通  ", fmt(s.wifi.rxMbps, 2).c_str(), fmt(s.wifi.txMbps, 2).c_str(),
+                    fmt(s.wifi.txLinkMbps, 1).c_str(), fmt(s.wifi.rxLinkMbps, 1).c_str(),
+                    fmt(s.wifi.signalDbm, 0).c_str());
     }
     std::printf("  電力   vph %sW  全ch計 %sW\n        ", fmt(s.powerMainW, 3).c_str(), fmt(s.powerSumW, 3).c_str());
     std::string chip;
@@ -415,18 +425,87 @@ void applyFakeThrottle(FrameStats& frame, double t) {
 /**
  * 見た目の確認用に、直通回線をダミーの状態にする。
  * @param sample 書き換える読み取り結果
- * @param value 電波の dBm（例: "-65"）、または "none"（未接続）
+ * @param value 電波の dBm（例: "-65"。直通回線）、"home:-47"（家の Wi-Fi）、または "none"（未接続）
  */
 void applyFakeWifi(SensorSample& sample, const std::string& value) {
     sample.wifi = WifiInfo();
     sample.wifi.interfaceUp = true;
     if (value == "none") return;  // ステーションなし = 未接続
     sample.wifi.connected = true;
-    sample.wifi.signalDbm = std::atof(value.c_str());
+    const bool home = value.rfind("home:", 0) == 0;
+    sample.wifi.homeWifi = home;
+    sample.wifi.signalDbm = std::atof(value.c_str() + (home ? 5 : 0));
     sample.wifi.rxMbps = 187.4;
     sample.wifi.txMbps = 2.1;
     sample.wifi.txLinkMbps = 1152.8;
     sample.wifi.rxLinkMbps = 960.7;
+}
+
+/**
+ * 更新チェッカーの設定を作る（スクリプトの場所は install.sh が置いた ~/.local/share/frame-perf-overlay/）。
+ * @return 設定
+ */
+frame_updater::UpdaterConfig makeUpdaterConfig() {
+    const char* xdgData = std::getenv("XDG_DATA_HOME");
+    std::string dataHome;
+    if (xdgData != nullptr && xdgData[0] != '\0') {
+        dataHome = xdgData;
+    } else {
+        const char* home = std::getenv("HOME");
+        dataHome = std::string(home != nullptr ? home : ".") + "/.local/share";
+    }
+    frame_updater::UpdaterConfig cfg;
+    cfg.script = dataHome + "/frame-perf-overlay/frame-update.sh";
+    cfg.app = "frame-perf-overlay";
+    cfg.repo = "sasaken1102r/frame-perf-overlay";
+    cfg.currentVersion = FRAME_PERF_OVERLAY_VERSION;
+    cfg.assetPattern = "frame-perf-overlay-{version}.tar.gz";
+    return cfg;
+}
+
+/**
+ * 見た目の確認用に、新しい版の確認の状態をダミーで作る（--preview-update 用）。
+ * @param name 状態の名前（uptodate / checking / available / manual / confirm / installing / installed / checkfailed /
+ *             installfailed）
+ * @return ダミーの状態（知らない名前なら uptodate）
+ */
+frame_updater::UpdateStatus fakeUpdateStatus(const std::string& name) {
+    using frame_updater::UpdateState;
+    frame_updater::UpdateStatus s;
+    s.current = FRAME_PERF_OVERLAY_VERSION;
+    s.latest = FRAME_PERF_OVERLAY_VERSION;
+    s.checkedAt = std::time(nullptr);
+    if (name == "available" || name == "confirm") {
+        s.state = UpdateState::Available;
+        s.latest = std::string(FRAME_PERF_OVERLAY_VERSION) + "-preview";
+        s.installable = true;
+        s.url = "https://github.com/sasaken1102r/frame-perf-overlay/releases/tag/v" + s.latest;
+    } else if (name == "manual") {
+        s.state = UpdateState::Available;
+        s.latest = std::string(FRAME_PERF_OVERLAY_VERSION) + "-preview";
+        s.installable = false;
+        s.reason = "no-checksums";
+    } else if (name == "checking") {
+        s.state = UpdateState::Unknown;  // 起動直後で、まだ答えが来ていない
+        s.checking = true;
+    } else if (name == "installing") {
+        s.state = UpdateState::Installing;
+        s.version = s.latest;
+        s.step = "download";
+    } else if (name == "installed") {
+        s.state = UpdateState::Installed;
+        s.version = s.latest;
+    } else if (name == "checkfailed") {
+        s.state = UpdateState::CheckFailed;
+        s.error = "network";
+    } else if (name == "installfailed") {
+        s.state = UpdateState::InstallFailed;
+        s.version = s.latest;
+        s.error = "checksum-mismatch";
+    } else {
+        s.state = UpdateState::UpToDate;
+    }
+    return s;
 }
 
 /**
@@ -493,7 +572,9 @@ int runDumpSettingsPng(const Options& options) {
     if (preview == "busy") autostartView = {AutostartStatus::State::Enabled, true, false};
     if (preview == "failed") autostartView = {AutostartStatus::State::Enabled, false, true};
     if (config.attachment != Attachment::Head) panel.showWristPage();
-    panel.render(config, autostartView);
+    const frame_updater::UpdateStatus updateView = fakeUpdateStatus(options.previewUpdate);
+    if (options.previewUpdate == "confirm") panel.armUpdateConfirmForPreview();
+    panel.render(config, autostartView, updateView);
     if (!panel.writePng(options.pngPath)) {
         std::fprintf(stderr, "PNG を書き出せませんでした: %s\n", options.pngPath.c_str());
         return 1;
@@ -532,9 +613,11 @@ int runDumpFrameTimings(const Options& options) {
  * @param config 今の設定（書き換える）
  * @param watcher 設定ファイルの監視役（自分の書き込みを読み直さないよう知らせる）
  * @param vr オーバーレイ
+ * @param angleStepDeg 向きのボタンの刻み（度。設定パネルの「1° ずつ / 5° ずつ」）
  */
-void handleSettingsAction(SettingsAction action, Config& config, ConfigWatcher& watcher, VrOverlay& vr) {
-    if (!applySettingsAction(action, config)) return;
+void handleSettingsAction(SettingsAction action, Config& config, ConfigWatcher& watcher, VrOverlay& vr,
+                          double angleStepDeg = 1.0) {
+    if (!applySettingsAction(action, config, angleStepDeg)) return;
     vr.applyConfig(config);
     std::string error;
     if (saveConfig(watcher.path(), config, error)) {
@@ -593,12 +676,18 @@ bool acquireInstanceLock(int& lockFd, pid_t& holderPid) {
 }
 
 /**
- * systemd のサービスとして起動されたかどうか（systemd はサービスに INVOCATION_ID を渡す）。
+ * このアプリの systemd サービス（frame-perf-overlay.service）として起動されたかどうか。
+ * INVOCATION_ID は Steam（これもサービス）から＋で起動した子にも引き継がれるので使えない。
+ * 自分の cgroup がこのアプリのユニットかどうかで見分ける。
  * @return サービスとして動いていれば true
  */
 bool runningAsService() {
-    const char* id = std::getenv("INVOCATION_ID");
-    return id != nullptr && id[0] != '\0';
+    std::ifstream file("/proc/self/cgroup");
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.find("/frame-perf-overlay.service") != std::string::npos) return true;
+    }
+    return false;
 }
 
 /**
@@ -657,8 +746,11 @@ int runOverlay(const Options& options) {
     PanelRenderer renderer(fonts);
     SettingsPanel settings(fonts);
     Autostart autostart;  // 自動起動（systemd ユーザーサービス）の状態と切り替え
+    frame_updater::UpdateChecker updater(makeUpdaterConfig());  // 新しい版の確認・インストール
+    std::uint64_t lastUpdaterRevision = updater.revision();
     PanelState state;
     VrOverlay vr;
+    vr.setVerbose(options.verbose);
 
     // SteamVR を待つ
     std::string lastMessage;
@@ -714,6 +806,12 @@ int runOverlay(const Options& options) {
                 fonts.load(config.fontPath, config.boldFontPath);
                 settingsDirty = true;
             }
+            // 新しい版の確認・インストール。GitHub に行くのはスクリプト側のキャッシュが切れたときだけ
+            updater.tick(config.updateCheck);
+            if (updater.revision() != lastUpdaterRevision) {
+                lastUpdaterRevision = updater.revision();
+                settingsDirty = true;
+            }
         }
         const VrEvents events = vr.pollEvents(slowCheck);
         // SteamVR 自体の終了（VREvent_Quit）は今までどおり終了コード 0。
@@ -743,8 +841,14 @@ int runOverlay(const Options& options) {
                     } else if (action == SettingsAction::AutostartOn || action == SettingsAction::AutostartOff) {
                         // systemctl --user enable / disable を子プロセスで始めるだけ（終わるのは待たない）
                         autostart.request(action == SettingsAction::AutostartOn);
+                    } else if (action == SettingsAction::UpdateCheckNow) {
+                        updater.checkNow();  // ［確認］: update_check が off でも動く
+                    } else if (action == SettingsAction::UpdateConfirmYes || action == SettingsAction::UpdateRetry) {
+                        updater.install();  // すぐ戻る。以後は状態ファイルを読んで進み具合を表示する
+                    } else if (action == SettingsAction::UpdateDismiss) {
+                        updater.dismiss();
                     } else {
-                        handleSettingsAction(action, config, watcher, vr);
+                        handleSettingsAction(action, config, watcher, vr, settings.angleStepDeg());
                     }
                     settingsDirty = true;
                     break;
@@ -786,7 +890,7 @@ int runOverlay(const Options& options) {
             }
         }
         if (settingsVisible && (settingsDirty || !settingsWasVisible)) {
-            settings.render(config, autostart.status());
+            settings.render(config, autostart.status(), updater.status());
             vr.submitSettings(settings.toRgba().data());
             settingsDirty = false;
         }
@@ -818,7 +922,7 @@ int runOverlay(const Options& options) {
                     lastVerbose = now;
                     std::fprintf(stderr,
                                  "[値] ループ %u 回 | fps %s frames=%u GPU %s/%sms CPU %s/%sms 目標 %sms(%sHz) 再投影 %s%% 落ち %u | "
-                                 "GPU使用率 %s%% CPU %s℃ GPU %s℃ vph %sW 熱制限 %d/%d | 直通 %s ↓%sMbps %sdBm | "
+                                 "GPU使用率 %s%% CPU %s℃ GPU %s℃ vph %sW 熱制限 %d/%d | 無線 %s ↓%sMbps %sdBm | "
                                  "コン L%s R%s | ダッシュボード %s 設定パネル %s | 送信 %s | CPU時間 ms: 読取 %.2f VR %.2f 描画 %.2f 変換 %.2f 送信 %.2f\n",
                                  loopCount, fmt(frame.appFps, 1).c_str(), frame.frames, fmt(frame.gpuMs, 2).c_str(),
                                  fmt(frame.gpuMaxMs, 2).c_str(),
@@ -828,7 +932,8 @@ int runOverlay(const Options& options) {
                                  fmt(sample.gpuBusyPct, 1).c_str(), fmt(sample.cpuTempC, 1).c_str(),
                                  fmt(sample.gpuTempC, 1).c_str(), fmt(sample.powerMainW, 2).c_str(),
                                  sample.throttleCpu ? 1 : 0, sample.throttleGpu ? 1 : 0,
-                                 sample.wifi.connected ? "接続" : "未接続", fmt(sample.wifi.rxMbps, 1).c_str(),
+                                 !sample.wifi.connected ? "未接続" : (sample.wifi.homeWifi ? "Wi-Fi" : "直通"),
+                                 fmt(sample.wifi.rxMbps, 1).c_str(),
                                  fmt(sample.wifi.signalDbm, 0).c_str(),
                                  state.controllers.left.present ? fmt(state.controllers.left.pct, 0).c_str() : "-",
                                  state.controllers.right.present ? fmt(state.controllers.right.pct, 0).c_str() : "-",
