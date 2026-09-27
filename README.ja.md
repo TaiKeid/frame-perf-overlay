@@ -4,6 +4,10 @@ Steam Frame 用の小さな性能パネルです。SteamVR の中に出しっぱ
 
 [English](README.md)
 
+https://github.com/user-attachments/assets/a749d90a-c6e8-4ea2-a881-61332d7e9ab4
+
+Half-Life: Alyx を遊びながらヘッドセットの中で撮った動画です（音なし）。パネルは左下に出たままで、SteamVR ダッシュボードの **Perf** タブから位置・大きさ・言語を変えられます。
+
 ![性能パネル](docs/images/panel-ja.png)
 
 パネルは頭に追従し、既定では視界の左下に出ます。位置・大きさ・透明度・言語（日本語 / English）は SteamVR のダッシュボードから変えられます。言語の既定は Steam の言語設定に合わせます（日本語なら日本語、それ以外は英語）。

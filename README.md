@@ -4,6 +4,10 @@ A small performance panel for the Steam Frame. It stays in view inside SteamVR a
 
 [日本語版はこちら](README.ja.md)
 
+https://github.com/user-attachments/assets/a749d90a-c6e8-4ea2-a881-61332d7e9ab4
+
+Recorded inside the headset while playing Half-Life: Alyx (no sound). The panel stays in the lower left, and the **Perf** tab of the SteamVR dashboard changes its position, size and language.
+
 ![The performance panel](docs/images/panel-en.png)
 
 The panel follows your head and sits in the lower left of your view by default. Position, size, opacity and language (English / Japanese) can be changed from the SteamVR dashboard.
