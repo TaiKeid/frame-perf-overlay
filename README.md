@@ -58,13 +58,14 @@ This installs:
 - the program: `~/.local/bin/frame-perf-overlay`
 - the launcher entry and icons: `~/.local/share/applications/frame-perf-overlay.desktop`, `~/.local/share/icons/hicolor/{48x48,128x128,256x256}/apps/frame-perf-overlay.png`
 - a systemd user service that starts together with SteamVR: `~/.config/systemd/user/frame-perf-overlay.service`
+- the updater script used by the **Update** button: `~/.local/share/frame-perf-overlay/frame-update.sh`, and the options you installed with, for the next update: `~/.config/frame-perf-overlay/install-args` (see [Updates](#updates))
 
-If SteamVR is running, the panel appears right away. SteamOS updates don't remove these files. To update, run `./install.sh` from the new version's folder.
+If SteamVR is running, the panel appears right away. SteamOS updates don't remove these files. New versions can be installed from the bar in the Perf tab (see [Updates](#updates)); to update by hand, run `./install.sh` from the new version's folder.
 
 Options:
 
 - `./install.sh --no-autostart` installs without the service being enabled. Start it yourself from the dashboard's **+** button (see below).
-- `./install.sh --uninstall` stops it and removes everything above. Your settings in `~/.config/frame-perf-overlay/` are kept; delete that folder too if you want them gone.
+- `./install.sh --uninstall` stops it and removes everything above except the folder `~/.config/frame-perf-overlay/` (your settings and `install-args`). Delete that folder too if you want them gone, and `~/.cache/frame-perf-overlay/` (the updater's cache and log) if it exists.
 
 ## Usage
 
@@ -91,7 +92,12 @@ Options:
   | Quit app | Click twice within 3 seconds to quit |
 
   Changes apply immediately and are saved to the settings file.
-- **Updates**: a bar in the title row (between the title and the panel status) always shows the running version, e.g. `Up to date (0.2.0)`, with a **Check now** button that asks GitHub right away (it works even with automatic checking off). Automatic checking runs once at start and at most once a day. When a newer release exists it changes to `Version 0.2.1 is available` with an **Update** button; clicking it asks "Update to 0.2.1?" once, and **Update** in that confirmation starts the install (**Cancel** backs out). Progress ("Downloading…", "Verifying…", …) is shown in the same bar; the panel may briefly disappear and reappear while it restarts on the new version. If it fails, the bar shows the reason and **Try again** / **Close**. Releases without a `SHA256SUMS` file can't be installed this way; the bar says so and points at the release page instead.
+- **Updates**: a bar in the title row, right of the title, always shows the running version, e.g. `Up to date (0.2.0)`, with a **Check now** button that asks GitHub right away (it works even with the automatic check turned off). What the bar shows:
+  - **New version**: a pink border, `Version 0.2.1 is available`, **Check now** and **Update**. **Update** asks `Update to 0.2.1?` with **Cancel** / **Update**; the second **Update** starts the install.
+  - **Updating**: the step (`Updating: Downloading`, …) and, on the right, a small grey note that the panel may close and reopen meanwhile. It does, once, when the new version starts.
+  - **Update failed**: a red border, the reason, **Try again** and **Close**. The version you had keeps running.
+  - **Couldn't check** (no network, GitHub unreachable, …): the border stays normal and only the text turns red, with **Check now**.
+  - **Can't install from here** (the release has no `SHA256SUMS`): a pink border and a note to update by hand from GitHub (see [Install](#install)).
 - **The + button** ("launch a program") in the dashboard lists **Frame Perf Overlay**. If it isn't running, this starts it. If it is already running, launching it again toggles the panel between shown and hidden.
 - **Quitting**: hover over the **Perf** icon at the bottom of the dashboard and press its close button, or use **Quit app** in the settings. It shuts down cleanly and stays off until the next SteamVR start (or until you start it from **+** or with `systemctl --user start frame-perf-overlay`).
 
@@ -104,7 +110,7 @@ A file with every key at its default value is in [`contrib/config.example.json`]
 | Key | Default | Meaning |
 |---|---|---|
 | `visible` | `true` | `false` hides the panel (and stops reading and drawing) |
-| `update_check` | `true` | `false` turns off the automatic daily check for a new release. The **Check now** button in the Perf tab still works either way |
+| `update_check` | `true` | `false` turns off the automatic checks for a new release (at start and daily). The **Check now** button in the Perf tab still works either way |
 | `language` | your Steam language | `"en"` (English) or `"ja"` (Japanese) |
 | `position.x` / `.y` / `.z` | `-0.15` / `-0.12` / `-0.5` | Panel center relative to your head, in meters. +x is right, +y is up, −z is forward |
 | `rotation.yaw` / `.pitch` / `.roll` | `0` / `0` / `0` | Panel rotation in degrees. `yaw` turns the face left/right (positive = toward +x, −180 to 180), `pitch` tilts it up/down (positive = up, −90 to 90), `roll` spins it in its own plane (positive = counterclockwise as you look at it, −180 to 180). Applied in the order yaw → pitch → roll. All 0 keeps the panel parallel to your face. "Face me" and the corner buttons set yaw and pitch and keep roll as it is |
@@ -141,7 +147,14 @@ The **Autostart** switch in the dashboard runs the same `enable` / `disable` (wi
 
 ## Updates
 
-`install.sh` puts a small updater script at `~/.local/share/frame-perf-overlay/frame-update.sh`; the panel runs it in the background to ask GitHub's API for the latest release and, once you confirm, to download and install it. It downloads only from github.com / api.github.com / \*.githubusercontent.com over HTTPS, verifies the tar.gz against the release's `SHA256SUMS` file before extracting it, and refuses to install if that file is missing (the bar then points at the release page for a manual update instead). The install runs as a separate systemd unit (`frame-perf-overlay-update`) so it keeps going even though it restarts the panel; its log is `~/.cache/frame-perf-overlay/update.log`. Turning `update_check` off (see [Settings file](#settings-file)) only stops the once-a-day background check — the **Check now** and **Update** buttons keep working.
+`install.sh` puts a small updater script at `~/.local/share/frame-perf-overlay/frame-update.sh`. The panel runs it in the background.
+
+- **When it checks**: at start and then every hour it asks the script, but the script asks GitHub at most once every 24 hours and reuses the last answer in between (after a failed check it tries again after an hour). **Check now** skips that cache. Setting `update_check` to `false` in the [settings file](#settings-file) stops the automatic checks (including the one at start); **Check now** and **Update** keep working.
+- **What it installs**: only after you confirm, it downloads the release's tar.gz and `SHA256SUMS` (from github.com / api.github.com / \*.githubusercontent.com over HTTPS), checks the tar.gz's SHA-256 against `SHA256SUMS` before extracting it, and refuses a release whose `SHA256SUMS` is missing or doesn't match. Then it runs that release's own `install.sh` with the options you used last time (kept in `~/.config/frame-perf-overlay/install-args`), so it installs exactly what running `./install.sh` by hand would.
+- **Where it runs**: the install runs as a separate, temporary systemd user unit, `frame-perf-overlay-update`, so it keeps going while `install.sh` restarts the panel. Its log is `~/.cache/frame-perf-overlay/update.log` (and `journalctl --user -u frame-perf-overlay-update`).
+- **If it fails**: the version you had stays installed and keeps running; the bar shows the reason.
+- **What the check protects against**: `SHA256SUMS` sits in the same GitHub release, so it catches a broken or truncated download, but not a release that was itself replaced — it is a checksum, not a signature.
+- **From v0.1.0**: v0.1.0 has no updater, so update to 0.2.0 by hand once (download it and run `./install.sh` from its folder, as in [Install](#install)). After that the panel can update itself.
 
 ## Troubleshooting
 
@@ -185,7 +198,7 @@ Some values were checked against another source on a Steam Frame; others are est
 
 ## Privacy
 
-- The app itself has no telemetry. The **only** outside network access is the update check: it asks `api.github.com` for the latest release (once at start, at most once a day while `update_check` is on, or right away when you press **Check now**), and, only after you confirm an install, downloads the release's tar.gz and `SHA256SUMS` from `github.com` / `*.githubusercontent.com` over HTTPS. Nothing else is sent; GitHub sees the usual anonymous HTTP request (your headset's IP, `curl`'s user agent). (For the Wi-Fi status shown in the panel it only asks the headset's own kernel — that never leaves the headset.)
+- The app itself has no telemetry. The **only** outside network access is the update check: it asks `api.github.com` for the latest release (while `update_check` is on: at start and then at most once every 24 hours — an hour after a failed check — or right away when you press **Check now**), and, only after you confirm an install, downloads the release's tar.gz and `SHA256SUMS` from `github.com` / `*.githubusercontent.com` over HTTPS. Nothing else is sent; GitHub sees the usual anonymous HTTP request (your headset's IP, `curl`'s user agent). (For the Wi-Fi status shown in the panel it only asks the headset's own kernel — that never leaves the headset.)
 - For the Steam Link direct link, and for the Wi-Fi access point the headset is joined to, it reads only the signal strength, link rates and byte counters, from the headset's own Wi-Fi driver. It doesn't extract, show or log any MAC address (PC, access point or headset) or the network name (SSID) of your Wi-Fi.
 - Files it writes: its own settings file (a temporary `config.json.tmp` next to it, renamed into place); a small lock file in `/run/user/<uid>` (memory only; `/tmp` if that folder doesn't exist) holding the app's process ID; and, only when checking or installing updates, the update helper's own cache files under `~/.cache/frame-perf-overlay/` (the last check's answer, install progress/log — see [Updates](#updates)).
 - Logs stay on the headset in the systemd journal.
@@ -197,7 +210,7 @@ Some values were checked against another source on a Steam Frame; others are est
 - It was made with an AI assistant (Claude) and tested on the author's own Steam Frame. It may not behave the same on yours.
 - What it does on your headset:
   - It only **reads** from sysfs and `/proc` (sensors, CPU, memory, and the GPU time the kernel reports for your own processes). It never writes there, and it doesn't touch fans, clocks, power settings or cameras. To pick the default language it also reads the `language` line of Steam's `~/.steam/registry.vdf` once at startup (read only).
-  - It writes only: its own settings file; the files `install.sh` puts under `~/.local` and the service file under `~/.config/systemd/user`; the update helper's cache files under `~/.cache/frame-perf-overlay/` (see [Privacy](#privacy)); and, when you use the **Autostart** switch, `systemctl --user enable` / `disable` for its own service.
+  - It writes only: its own settings file; the files `install.sh` puts under `~/.local`, the service file under `~/.config/systemd/user` and `~/.config/frame-perf-overlay/install-args`; the update helper's cache files under `~/.cache/frame-perf-overlay/` (see [Privacy](#privacy)); when you use the **Autostart** switch, `systemctl --user enable` / `disable` for its own service; and, when you confirm an update, a temporary systemd user unit (`frame-perf-overlay-update`, started with `systemd-run --user`) that runs the new release's `install.sh`.
   - Its only outside network access is the GitHub update check described in [Privacy](#privacy) — nothing else it does talks to any server, on or off the headset.
   - It doesn't change any Steam or SteamVR files or settings. It is an ordinary OpenVR overlay and uses only the public OpenVR API.
 - The app doesn't modify or inject into Steam or SteamVR; it works like any other SteamVR overlay app and reads information that Linux gives to normal users. The [Steam Subscriber Agreement](https://store.steampowered.com/subscriber_agreement/) still applies to how you use Steam, so if you have doubts, read it and decide for yourself.

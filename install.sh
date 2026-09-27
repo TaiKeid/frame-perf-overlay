@@ -48,8 +48,11 @@ stop_manual_instance() {
     [[ -n "$pid" ]] || return 0
     # ロックファイルの PID が古くて別のプロセスに使い回されていることがあるので、名前を確かめる
     # （/proc/<pid>/comm は 15 文字で切れるので、cmdline の実行ファイル名で比べる）
+    # ロックファイルは終了後も残るので、PID のプロセスがもういないことがある（サービスを止めた直後など）。
+    # そのときは何もしない（読めないファイルを < で開くと set -e で install.sh ごと止まってしまう）
+    [[ -r "/proc/$pid/cmdline" ]] || return 0
     local argv0
-    argv0="$(tr '\0' '\n' < "/proc/$pid/cmdline" 2>/dev/null | head -n 1)"
+    argv0="$( { tr '\0' '\n' < "/proc/$pid/cmdline"; } 2>/dev/null | head -n 1 || true)"
     [[ "$(basename -- "${argv0:-x}")" == "$name" ]] || return 0
     local service_pid
     service_pid="$(systemctl --user show -p MainPID --value "$unit" 2>/dev/null || echo 0)"
@@ -77,7 +80,8 @@ if [[ "$uninstall" == 1 ]]; then
     # --now の停止は SIGTERM なので、アプリの終了処理がふだんどおり通る
     systemctl --user disable --now "$unit" 2>/dev/null || true
     stop_manual_instance
-    rm -f "$unit_dir/$unit" "$bin" "$desktop"
+    rm -f "$unit_dir/$unit" "$bin" "$desktop" "$data_home/$name/frame-update.sh"
+    rmdir "$data_home/$name" 2>/dev/null || true  # 空になったら消す（ほかに何か置かれていれば残す）
     for size in $icon_sizes; do
         rm -f "$icons/${size}x${size}/apps/$name.png"
     done
@@ -186,7 +190,7 @@ else
 fi
 cat <<EOF
   Settings: SteamVR dashboard > Perf, or $config_dir/config.json
-  Updates:  the Perf tab shows the version and checks GitHub for a newer one (once a day; "update_check": false in config.json to turn that off, the Check button still works)
+  Updates:  the Perf tab shows the version and checks GitHub for a newer one (at start and at most once a day; "update_check": false in config.json turns that off, "Check now" still works)
   Logs:     journalctl --user -u $name -f
   Remove:   ./install.sh --uninstall
 EOF
