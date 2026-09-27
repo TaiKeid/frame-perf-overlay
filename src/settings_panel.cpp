@@ -805,10 +805,9 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
                 headline = text.updateCheckFailed;
                 detail = updateErrorText(config.language, update.error);
                 detailSep = " ";
+                // 枠は普通のまま、文字だけ赤（オフラインだと毎日出るので、赤い枠は目立ちすぎる）
                 color = kDanger;
                 bold = true;
-                border = kDanger;
-                borderWidth = 2;
                 if (!update.checking) buttons = {SettingsAction::UpdateCheckNow};
                 break;
             case UpdateState::InstallFailed:
