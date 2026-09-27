@@ -740,8 +740,6 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
     const bool confirming = updateConfirmArmed_ && update.state == UpdateState::Available;
     drawCard(pen, left, kHeaderY, right - left, kHeaderH, 16, kCard, kCard, 0);
 
-    /** バージョン番号の前に v を付ける。 */
-    const auto vtag = [](const std::string& v) { return "v" + v; };
     /** printf 書式（%s が 1 つ）に版を当てはめる。 */
     const auto format1 = [](const char* fmt, const std::string& value) {
         char buf[192];
@@ -757,22 +755,22 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
     std::vector<SettingsAction> buttons;  // 右に置くボタン（左から順）
 
     if (confirming) {
-        headline = format1(text.updateConfirmFormat, vtag(update.latest));
+        headline = format1(text.updateConfirmFormat, update.latest);
         color = kText;
         bold = true;
         buttons = {SettingsAction::UpdateConfirmNo, SettingsAction::UpdateConfirmYes};
     } else {
         switch (update.state) {
             case UpdateState::Unknown:
-                headline = update.checking ? text.updateChecking : vtag(update.current);
+                headline = update.checking ? text.updateChecking : update.current;
                 if (!update.checking) buttons = {SettingsAction::UpdateCheckNow};
                 break;
             case UpdateState::UpToDate:
-                headline = format1(text.updateUpToDateFormat, vtag(update.current));
+                headline = format1(text.updateUpToDateFormat, update.current);
                 if (!update.checking) buttons = {SettingsAction::UpdateCheckNow};
                 break;
             case UpdateState::Available:
-                headline = format1(text.updateAvailableFormat, vtag(update.latest));
+                headline = format1(text.updateAvailableFormat, update.latest);
                 color = kWarn;
                 bold = true;
                 if (!update.installable) {
@@ -787,7 +785,7 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
                 color = kText;
                 break;  // 進行中はボタンなし
             case UpdateState::Installed:
-                headline = format1(text.updateInstalledFormat, vtag(update.version));
+                headline = format1(text.updateInstalledFormat, update.version);
                 color = kSuccess;
                 bold = true;
                 buttons = {SettingsAction::UpdateDismiss};
