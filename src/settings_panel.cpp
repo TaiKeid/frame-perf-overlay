@@ -539,7 +539,7 @@ void SettingsPanel::drawSegmented(const Pen& pen, const UiText& text, SettingsAc
 }
 
 void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsAction action, bool selected,
-                               double size, int rotateIcon) const {
+                               double size, int rotateIcon, bool check) const {
     const Button* b = findButton(action);
     if (b == nullptr) return;
     const bool pressed = pressed_ == action;
@@ -558,13 +558,13 @@ void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsActio
         strokeRounded(pen, b->x, b->y, b->w, b->h, r, pressed ? kAccent : kBorder, 2);
     }
     const std::string label = labelOf(action, text);
-    const double checkW = selected ? size * 0.9 : 0;
+    const double checkW = selected && check ? size * 0.9 : 0;
     const double iconW = rotateIcon != 0 ? size * 1.15 : 0;  // 回す向きの絵と、文言との間
     const double labelSize = fitSize(pen, label, size, size * 0.65, b->w - 20 - checkW - iconW, true);
     const double labelW = pen.measure(label, labelSize, true);
     const double tx = b->x + (b->w - labelW - checkW - iconW) / 2;
     const Color fg = selected ? kOnAccent : kText;
-    if (selected) drawCheck(pen.cr, tx + checkW * 0.4, b->y + b->h / 2, size * 0.72, kOnAccent);
+    if (selected && check) drawCheck(pen.cr, tx + checkW * 0.4, b->y + b->h / 2, size * 0.72, kOnAccent);
     const double labelX = tx + checkW + (rotateIcon < 0 ? iconW : 0);
     if (rotateIcon != 0) {
         const double iconCx = rotateIcon < 0 ? tx + checkW + size * 0.45 : labelX + labelW + size * 0.7;
@@ -738,7 +738,6 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
     }
 
     const bool confirming = updateConfirmArmed_ && update.state == UpdateState::Available;
-    drawCard(pen, left, kHeaderY, right - left, kHeaderH, 16, kCard, kCard, 0);
 
     /** printf 書式（%s が 1 つ）に版を当てはめる。 */
     const auto format1 = [](const char* fmt, const std::string& value) {
@@ -753,11 +752,17 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
     Color color = kTextMuted;
     bool bold = false;
     std::vector<SettingsAction> buttons;  // 右に置くボタン（左から順）
+    // 帯の枠（Frame のアプリ共通の見本に合わせる）: 新しい版・確認はピンク、失敗は赤、ほかは枠なし
+    Color border = kCard;
+    double borderWidth = 0;
+    std::string hint;  // 右に小さく出す灰色の補足（更新中だけ）
 
     if (confirming) {
         headline = format1(text.updateConfirmFormat, update.latest);
         color = kText;
         bold = true;
+        border = kAccent;
+        borderWidth = 2;
         buttons = {SettingsAction::UpdateConfirmNo, SettingsAction::UpdateConfirmYes};
     } else {
         switch (update.state) {
@@ -771,18 +776,22 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
                 break;
             case UpdateState::Available:
                 headline = format1(text.updateAvailableFormat, update.latest);
-                color = kWarn;
+                color = kAccentText;
                 bold = true;
+                border = kAccent;
+                borderWidth = 2;
                 if (!update.installable) {
                     detail = text.updateManual;
                     detailSep = "  ";
                 }
-                if (update.installable) buttons.push_back(SettingsAction::UpdateInstall);
+                // 見本どおり［今すぐ確かめる］［更新する］の順（強調の［更新する］を右端に）
                 if (!update.checking) buttons.push_back(SettingsAction::UpdateCheckNow);
+                if (update.installable) buttons.push_back(SettingsAction::UpdateInstall);
                 break;
             case UpdateState::Installing:
                 headline = format1(text.updateInstallingFormat, updateStepText(config.language, update.step));
                 color = kText;
+                hint = text.updateConfirmHint;  // 途中で画面が閉じて開き直すことがある旨
                 break;  // 進行中はボタンなし
             case UpdateState::Installed:
                 headline = format1(text.updateInstalledFormat, update.version);
@@ -797,6 +806,9 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
                 detail = updateErrorText(config.language, update.error);
                 detailSep = " ";
                 color = kDanger;
+                bold = true;
+                border = kDanger;
+                borderWidth = 2;
                 if (!update.checking) buttons = {SettingsAction::UpdateCheckNow};
                 break;
             case UpdateState::InstallFailed:
@@ -805,10 +817,14 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
                 detailSep = " ";
                 color = kDanger;
                 bold = true;
+                border = kDanger;
+                borderWidth = 2;
                 buttons = {SettingsAction::UpdateRetry, SettingsAction::UpdateDismiss};
                 break;
         }
     }
+
+    drawCard(pen, left, kHeaderY, right - left, kHeaderH, 16, kCard, border, borderWidth);
 
     // 右のボタンを右詰めで置く（幅は文言に合わせる。高さはほかのボタンと同じ 68px）
     const double btnY = kHeaderY + (kHeaderH - kButtonH) / 2;
@@ -822,7 +838,34 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
         buttonX -= gap;
     }
     const double textLeft = left + kCardPad;
-    const double textRight = buttons.empty() ? right - kCardPad : buttonX + gap - 16;
+    double textRight = buttons.empty() ? right - kCardPad : buttonX + gap - 16;
+    if (!hint.empty()) {
+        // 補足は右詰めで小さく。見出しの幅を先に取り、残りに入れる。1 行で 15px に届かなければ、
+        // 文の切れ目（「。」/ ". "）で 2 行に分ける（文言は変えない）
+        const double headW = pen.measure(headline, 22, bold);
+        const double hintRight = right - kCardPad;
+        const double hintMaxW = hintRight - (textLeft + headW + 24);
+        const double hintSize = fitSize(pen, hint, 17, 12, hintMaxW, false);
+        size_t cut = hint.find("。");
+        size_t cutLen = 3;  // 「。」は UTF-8 で 3 バイト
+        if (cut == std::string::npos) {
+            cut = hint.find(". ");
+            cutLen = 1;
+        }
+        if (hintSize >= 15 || cut == std::string::npos) {
+            pen.text(hintRight, centerBaseline(kHeaderY, kHeaderH, hintSize), hint, hintSize, kTextMuted, false, true);
+            textRight = hintRight - pen.measure(hint, hintSize, false) - 24;
+        } else {
+            const std::string first = hint.substr(0, cut + cutLen);
+            std::string second = hint.substr(cut + cutLen);
+            while (!second.empty() && second[0] == ' ') second.erase(0, 1);
+            const double size = std::min(fitSize(pen, first, 16, 12, hintMaxW, false),
+                                         fitSize(pen, second, 16, 12, hintMaxW, false));
+            pen.text(hintRight, kHeaderY + 36, first, size, kTextMuted, false, true);
+            pen.text(hintRight, kHeaderY + 62, second, size, kTextMuted, false, true);
+            textRight = hintRight - std::max(pen.measure(first, size, false), pen.measure(second, size, false)) - 24;
+        }
+    }
     // 1 行で 20px 以上で入ればそのまま。入らなければ、見出しと補足を 2 行に分ける（文言は変えない）
     const double maxTextW = textRight - textLeft;
     const std::string oneLine = detail.empty() ? headline : headline + detailSep + detail;
@@ -835,7 +878,11 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
         pen.text(textLeft, kHeaderY + 36, headline, size1, color, bold);
         pen.text(textLeft, kHeaderY + 66, detail, size2, color, bold);
     }
-    for (const SettingsAction a : buttons) drawButton(pen, text, a, false, 22);
+    // ［更新する］（確認へ・確認の実行）は強調ボタン（アクセントの塗り ＋ 濃い文字。✓ は付けない）
+    for (const SettingsAction a : buttons) {
+        const bool primary = a == SettingsAction::UpdateInstall || a == SettingsAction::UpdateConfirmYes;
+        drawButton(pen, text, a, primary, 22, 0, false);
+    }
 }
 
 void SettingsPanel::render(const Config& config, const AutostartStatus& autostart,

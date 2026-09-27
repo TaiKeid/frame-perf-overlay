@@ -240,9 +240,10 @@ private:
      * @param size 文字の大きさ（入りきらなければ小さくする）
      * @param rotateIcon 回す向きの絵（-1 = 文言の左に反時計回り ⟲、+1 = 文言の右に時計回り ⟳、0 = なし）。
      *                   フォントに ⟲ ⟳ の字が無いので線で描く
+     * @param check selected のとき ✓ を付けるか（false なら塗りだけの強調ボタン。更新の帯の［更新する］）
      */
     void drawButton(const Pen& pen, const UiText& text, SettingsAction action, bool selected, double size,
-                    int rotateIcon = 0) const;
+                    int rotateIcon = 0, bool check = true) const;
 
     /**
      * 見出しと、右上の状態のピル（● パネル表示中 / ○ パネル非表示）を描く。

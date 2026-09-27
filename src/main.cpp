@@ -185,7 +185,7 @@ void printUsage() {
         "      --thumbnail-size N    そのサムネイルの一辺（既定 256）\n"
         "      --preview-quit   「もう一度押すと終了」の状態で描く\n"
         "      --preview-autostart S  自動起動をこの状態で描く（enabled / disabled / notinstalled / busy / failed）\n"
-        "      --preview-update S     新しい版の確認をこの状態で描く（uptodate / available / manual / confirm /\n"
+        "      --preview-update S     新しい版の確認をこの状態で描く（uptodate / checking / available / manual / confirm /\n"
         "                             installing / installed / checkfailed / installfailed。既定は uptodate）\n"
         "  --language ja|en     PNG の書き出しで、設定の言語の代わりにこの言語で描く\n"
         "  --config PATH        設定ファイル（既定 ~/.config/frame-perf-overlay/config.json）\n"
@@ -465,7 +465,8 @@ frame_updater::UpdaterConfig makeUpdaterConfig() {
 
 /**
  * 見た目の確認用に、新しい版の確認の状態をダミーで作る（--preview-update 用）。
- * @param name 状態の名前（uptodate / available / manual / confirm / installing / installed / checkfailed / installfailed）
+ * @param name 状態の名前（uptodate / checking / available / manual / confirm / installing / installed / checkfailed /
+ *             installfailed）
  * @return ダミーの状態（知らない名前なら uptodate）
  */
 frame_updater::UpdateStatus fakeUpdateStatus(const std::string& name) {
@@ -484,6 +485,9 @@ frame_updater::UpdateStatus fakeUpdateStatus(const std::string& name) {
         s.latest = std::string(FRAME_PERF_OVERLAY_VERSION) + "-preview";
         s.installable = false;
         s.reason = "no-checksums";
+    } else if (name == "checking") {
+        s.state = UpdateState::Unknown;  // 起動直後で、まだ答えが来ていない
+        s.checking = true;
     } else if (name == "installing") {
         s.state = UpdateState::Installing;
         s.version = s.latest;
