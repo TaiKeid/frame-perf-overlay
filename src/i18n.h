@@ -110,7 +110,7 @@ struct UiText {
     const char* updateInstalledFormat;   ///< `Installed`（%s は版）
     const char* updateInstallFailed;     ///< `InstallFailed` の見出し（理由が続く）
     const char* updateCheckFailed;       ///< `CheckFailed` の見出し（理由が続く）
-    const char* updateCheckNow;          ///< ［確認］ボタン（幅が狭いので短くしてある）
+    const char* updateCheckNow;          ///< ［確認］ボタン（strings.md のまま。幅は足りている）
     const char* updateRetry;             ///< `InstallFailed` のやり直しボタン
     const char* updateDismiss;           ///< `Installed` / `InstallFailed` を閉じる
     const char* updateLogHint;           ///< 失敗したときの補足（ログの場所）

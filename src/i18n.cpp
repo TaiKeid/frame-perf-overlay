@@ -82,7 +82,7 @@ const UiText kJapanese = {
     "更新する", "やめる",
     "更新中: %s", "%s を入れました。開き直すと新しい版になります",
     "更新できませんでした（今の版のままです）:", "新しい版を確かめられませんでした:",
-    "確認", "もう一度", "閉じる",
+    "今すぐ確かめる", "もう一度", "閉じる",
     "くわしくは ~/.cache/frame-perf-overlay/update.log",
 };
 
@@ -116,7 +116,7 @@ const UiText kEnglish = {
     "Update", "Cancel",
     "Updating: %s", "%s is installed. Reopen to use it",
     "The update failed (nothing was changed):", "Couldn't check for updates:",
-    "Check", "Try again", "Close",
+    "Check now", "Try again", "Close",
     "Details: ~/.cache/frame-perf-overlay/update.log",
 };
 
