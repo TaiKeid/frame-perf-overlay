@@ -76,7 +76,7 @@ const UiText kJapanese = {
     "変更はすぐ反映され、設定ファイルに保存されます",
     // 更新
     "新しい版の確認",
-    "最新の版です（%s）", "新しい版を確かめています…", "新しい版 %s があります",
+    "最新版です（%s）", "新しい版を確かめています…", "新しい版 %s があります",
     "更新する", "ここからは入れられない版です。GitHub から手で更新してね", "リリースページ:",
     "%s に更新しますか？", "ダウンロードして入れ替えます。途中でこの画面が閉じて開き直すことがあります",
     "更新する", "やめる",
@@ -187,7 +187,7 @@ std::string updateErrorText(Language language, const std::string& error) {
     if (error == "install-failed") return en ? "install.sh failed" : "install.sh が失敗しました";
     if (error == "bad-args") return en ? "The saved install options are invalid" : "前回のインストールのオプションを読めません";
     if (error == "busy") return en ? "Another update is running" : "別の更新が動いています";
-    if (error == "not-newer") return en ? "Already up to date" : "もう最新の版です";
+    if (error == "not-newer") return en ? "Already up to date" : "もう最新版です";
     if (error == "detach-failed") return en ? "Couldn't start the update (systemd-run)" : "更新を始められませんでした（systemd-run）";
     if (error == "interrupted") return en ? "The update was interrupted" : "更新が途中で止まりました";
     if (error == "io") return en ? "Couldn't write files" : "ファイルを書けませんでした";
