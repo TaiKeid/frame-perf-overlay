@@ -59,7 +59,7 @@ constexpr double kQuitW = 230;
 constexpr double kNudgeM = 0.02;       // 上下左右の微調整（m）
 constexpr double kDepthStepM = 0.05;   // 前後の微調整（m）
 constexpr double kPresetDistance = 0.5;  // プリセットの座標はこの距離での値
-constexpr double kAngleStepDeg = 5.0;    // 向きの 1 回の変化（度）
+constexpr double kAngleStepDeg = 1.0;    // 向きの 1 回の変化（度）
 
 /** 位置のプリセット（距離 0.5m での x, y）。 */
 struct Preset {
@@ -114,7 +114,7 @@ std::string signedCm(double meters) {
 }
 
 /**
- * 角度を 5° 刻みの次の目盛りへ進める（例: 16.7° から増やすと 20°、減らすと 15°）。範囲の外には出さない。
+ * 角度を 1° 刻みの次の目盛りへ進める（例: 16.7° から増やすと 17°、減らすと 16°）。範囲の外には出さない。
  * @param degrees 今の角度（度）
  * @param direction +1 で増やす、-1 で減らす
  * @param limit 範囲（±limit）

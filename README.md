@@ -81,7 +81,7 @@ Options:
   | Top L / Top R / Bottom L / Bottom C / Bottom R | Move the panel to that corner of your view and turn it to face you |
   | ← Left / Right → / ↑ Up / ↓ Down | Nudge the panel by 2 cm. The facing stays as it is |
   | Closer / Farther | Move it 5 cm nearer or further (20 cm to 3 m), keeping the direction |
-  | Facing: ← Left / Right → / ↑ Up / ↓ Down | Turn the panel's face in 5° steps (left/right up to ±180°, up/down up to ±90°) |
+  | Facing: ← Left / Right → / ↑ Up / ↓ Down | Turn the panel's face in 1° steps (left/right up to ±180°, up/down up to ±90°) |
   | Face me | Keep the position and turn the panel so it faces your head |
   | Face ahead | Remove the rotation, so the panel is parallel to your face again (the look before this feature) |
   | Language | English or Japanese, applied immediately |
