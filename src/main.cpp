@@ -8,6 +8,7 @@
 #include "settings_panel.h"
 #include "theme.h"
 #include "sensors.h"
+#include "update_check.h"  // vendor/frame-updater/cpp
 #include "vr_overlay.h"
 
 #include <fcntl.h>
@@ -67,6 +68,8 @@ struct Options {
     bool previewQuit = false; ///< --dump-settings-png で「もう一度押すと終了」の状態を描く
     bool forceSettingsVisible = false;  ///< 診断用: 設定パネルが見えているものとして 50ms の周期で回す
     std::string previewAutostart;  ///< --dump-settings-png で自動起動をこの状態として描く（enabled / disabled / notinstalled / busy / failed）
+    std::string previewUpdate;  ///< --dump-settings-png で新しい版の確認をこの状態として描く
+                                 ///< （uptodate / available / manual / confirm / installing / installed / checkfailed / installfailed）
     bool fakeFrames = false;
     bool fakeWarnings = false;
     double fakeFps = 0.0;
@@ -182,6 +185,8 @@ void printUsage() {
         "      --thumbnail-size N    そのサムネイルの一辺（既定 256）\n"
         "      --preview-quit   「もう一度押すと終了」の状態で描く\n"
         "      --preview-autostart S  自動起動をこの状態で描く（enabled / disabled / notinstalled / busy / failed）\n"
+        "      --preview-update S     新しい版の確認をこの状態で描く（uptodate / available / manual / confirm /\n"
+        "                             installing / installed / checkfailed / installfailed。既定は uptodate）\n"
         "  --language ja|en     PNG の書き出しで、設定の言語の代わりにこの言語で描く\n"
         "  --config PATH        設定ファイル（既定 ~/.config/frame-perf-overlay/config.json）\n"
         "  --verbose            オーバーレイ中、数秒ごとに値を標準エラーに出す\n"
@@ -239,6 +244,8 @@ bool parseOptions(int argc, char** argv, Options& options) {
             }
         } else if (arg == "--preview-autostart" && hasNext) {
             options.previewAutostart = argv[++i];
+        } else if (arg == "--preview-update" && hasNext) {
+            options.previewUpdate = argv[++i];
         } else if (arg == "--contrast-report") {
             options.mode = Options::Mode::ContrastReport;
         } else if (arg == "--force-settings-visible") {
@@ -431,6 +438,69 @@ void applyFakeWifi(SensorSample& sample, const std::string& value) {
 }
 
 /**
+ * 更新チェッカーの設定を作る（スクリプトの場所は install.sh が置いた ~/.local/share/frame-perf-overlay/）。
+ * @return 設定
+ */
+frame_updater::UpdaterConfig makeUpdaterConfig() {
+    const char* xdgData = std::getenv("XDG_DATA_HOME");
+    std::string dataHome;
+    if (xdgData != nullptr && xdgData[0] != '\0') {
+        dataHome = xdgData;
+    } else {
+        const char* home = std::getenv("HOME");
+        dataHome = std::string(home != nullptr ? home : ".") + "/.local/share";
+    }
+    frame_updater::UpdaterConfig cfg;
+    cfg.script = dataHome + "/frame-perf-overlay/frame-update.sh";
+    cfg.app = "frame-perf-overlay";
+    cfg.repo = "sasaken1102r/frame-perf-overlay";
+    cfg.currentVersion = FRAME_PERF_OVERLAY_VERSION;
+    cfg.assetPattern = "frame-perf-overlay-{version}.tar.gz";
+    return cfg;
+}
+
+/**
+ * 見た目の確認用に、新しい版の確認の状態をダミーで作る（--preview-update 用）。
+ * @param name 状態の名前（uptodate / available / manual / confirm / installing / installed / checkfailed / installfailed）
+ * @return ダミーの状態（知らない名前なら uptodate）
+ */
+frame_updater::UpdateStatus fakeUpdateStatus(const std::string& name) {
+    using frame_updater::UpdateState;
+    frame_updater::UpdateStatus s;
+    s.current = FRAME_PERF_OVERLAY_VERSION;
+    s.latest = FRAME_PERF_OVERLAY_VERSION;
+    s.checkedAt = std::time(nullptr);
+    if (name == "available" || name == "confirm") {
+        s.state = UpdateState::Available;
+        s.latest = std::string(FRAME_PERF_OVERLAY_VERSION) + "-preview";
+        s.installable = true;
+        s.url = "https://github.com/sasaken1102r/frame-perf-overlay/releases/tag/v" + s.latest;
+    } else if (name == "manual") {
+        s.state = UpdateState::Available;
+        s.latest = std::string(FRAME_PERF_OVERLAY_VERSION) + "-preview";
+        s.installable = false;
+        s.reason = "no-checksums";
+    } else if (name == "installing") {
+        s.state = UpdateState::Installing;
+        s.version = s.latest;
+        s.step = "download";
+    } else if (name == "installed") {
+        s.state = UpdateState::Installed;
+        s.version = s.latest;
+    } else if (name == "checkfailed") {
+        s.state = UpdateState::CheckFailed;
+        s.error = "network";
+    } else if (name == "installfailed") {
+        s.state = UpdateState::InstallFailed;
+        s.version = s.latest;
+        s.error = "checksum-mismatch";
+    } else {
+        s.state = UpdateState::UpToDate;
+    }
+    return s;
+}
+
+/**
  * --dump-png: OpenVR なしで値を集めてパネルを描き、PNG に書き出す。
  * @param options コマンドライン
  * @return 終了コード
@@ -493,7 +563,9 @@ int runDumpSettingsPng(const Options& options) {
     if (preview == "notinstalled") autostartView = {AutostartStatus::State::NotInstalled, false, false};
     if (preview == "busy") autostartView = {AutostartStatus::State::Enabled, true, false};
     if (preview == "failed") autostartView = {AutostartStatus::State::Enabled, false, true};
-    panel.render(config, autostartView);
+    const frame_updater::UpdateStatus updateView = fakeUpdateStatus(options.previewUpdate);
+    if (options.previewUpdate == "confirm") panel.armUpdateConfirmForPreview();
+    panel.render(config, autostartView, updateView);
     if (!panel.writePng(options.pngPath)) {
         std::fprintf(stderr, "PNG を書き出せませんでした: %s\n", options.pngPath.c_str());
         return 1;
@@ -663,6 +735,8 @@ int runOverlay(const Options& options) {
     PanelRenderer renderer(fonts);
     SettingsPanel settings(fonts);
     Autostart autostart;  // 自動起動（systemd ユーザーサービス）の状態と切り替え
+    frame_updater::UpdateChecker updater(makeUpdaterConfig());  // 新しい版の確認・インストール
+    std::uint64_t lastUpdaterRevision = updater.revision();
     PanelState state;
     VrOverlay vr;
     vr.setVerbose(options.verbose);
@@ -720,6 +794,12 @@ int runOverlay(const Options& options) {
                 fonts.load(config.fontPath, config.boldFontPath);
                 settingsDirty = true;
             }
+            // 新しい版の確認・インストール。GitHub に行くのはスクリプト側のキャッシュが切れたときだけ
+            updater.tick(config.updateCheck);
+            if (updater.revision() != lastUpdaterRevision) {
+                lastUpdaterRevision = updater.revision();
+                settingsDirty = true;
+            }
         }
         const VrEvents events = vr.pollEvents(slowCheck);
         // SteamVR 自体の終了（VREvent_Quit）は今までどおり終了コード 0。
@@ -749,6 +829,12 @@ int runOverlay(const Options& options) {
                     } else if (action == SettingsAction::AutostartOn || action == SettingsAction::AutostartOff) {
                         // systemctl --user enable / disable を子プロセスで始めるだけ（終わるのは待たない）
                         autostart.request(action == SettingsAction::AutostartOn);
+                    } else if (action == SettingsAction::UpdateCheckNow) {
+                        updater.checkNow();  // ［確認］: update_check が off でも動く
+                    } else if (action == SettingsAction::UpdateConfirmYes || action == SettingsAction::UpdateRetry) {
+                        updater.install();  // すぐ戻る。以後は状態ファイルを読んで進み具合を表示する
+                    } else if (action == SettingsAction::UpdateDismiss) {
+                        updater.dismiss();
                     } else {
                         handleSettingsAction(action, config, watcher, vr);
                     }
@@ -792,7 +878,7 @@ int runOverlay(const Options& options) {
             }
         }
         if (settingsVisible && (settingsDirty || !settingsWasVisible)) {
-            settings.render(config, autostart.status());
+            settings.render(config, autostart.status(), updater.status());
             vr.submitSettings(settings.toRgba().data());
             settingsDirty = false;
         }

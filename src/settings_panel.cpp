@@ -13,12 +13,14 @@
 
 namespace {
 
-// 1200×826 を幅 2.8m で出す（1px あたりの大きさは前の 1024px / 2.4m とほぼ同じ）
+// 1200×914 を幅 2.8m で出す（1px あたりの大きさは前の 1024px / 2.4m とほぼ同じ）
 constexpr int kWidth = 1200;
-constexpr int kHeight = 826;
+constexpr int kHeight = 914;
 constexpr double kPad = 28;          // パネルの外側の余白
 constexpr double kButtonH = 68;      // ボタンの高さ（レーザーで押しやすい大きさ。前と同じ）
-constexpr double kCardY = 84;        // 左右のカードの上端
+constexpr double kUpdateBarY = 84;    // 見出しの下、新しい版の確認の帯（いつも見えている行）
+constexpr double kUpdateBarH = 64;
+constexpr double kCardY = kUpdateBarY + kUpdateBarH + 24;  // 左右のカードの上端
 constexpr double kCardH = 424;
 constexpr double kCardPad = 20;      // カードの中の余白
 constexpr double kLeftCardX = kPad;  // 左のカード「パネル」
@@ -211,6 +213,12 @@ bool applySettingsAction(SettingsAction action, Config& config) {
         case SettingsAction::AutostartOn:   // 自動起動は設定ファイルではなく systemd なので呼び出し側で扱う
         case SettingsAction::AutostartOff:
         case SettingsAction::Quit:  // 終了は呼び出し側で扱う
+        case SettingsAction::UpdateCheckNow:    // 更新はどれも設定ファイルを変えない。呼び出し側で扱う
+        case SettingsAction::UpdateInstall:
+        case SettingsAction::UpdateConfirmYes:
+        case SettingsAction::UpdateConfirmNo:
+        case SettingsAction::UpdateRetry:
+        case SettingsAction::UpdateDismiss:
         case SettingsAction::None: break;
     }
     return config.visible != before.visible || config.posX != before.posX || config.posY != before.posY ||
@@ -327,6 +335,12 @@ std::string SettingsPanel::labelOf(SettingsAction action, const UiText& text) co
         case SettingsAction::Quit: return quitArmed_ ? text.quitConfirm : text.quit;
         case SettingsAction::AutostartOn: return text.on;
         case SettingsAction::AutostartOff: return text.off;
+        case SettingsAction::UpdateCheckNow: return text.updateCheckNow;
+        case SettingsAction::UpdateInstall: return text.updateButton;
+        case SettingsAction::UpdateConfirmYes: return text.updateConfirmYes;
+        case SettingsAction::UpdateConfirmNo: return text.updateConfirmNo;
+        case SettingsAction::UpdateRetry: return text.updateRetry;
+        case SettingsAction::UpdateDismiss: return text.updateDismiss;
         case SettingsAction::None: break;
     }
     return "";
@@ -359,6 +373,17 @@ SettingsAction SettingsPanel::pointerDown(double x, double y, double now) {
         return SettingsAction::None;
     }
     quitArmed_ = false;  // 別のボタンを押したら確認は取り消す
+    if (pressed_ == SettingsAction::UpdateInstall) {
+        // 「更新する」の 1 回目は、確認の表示（「%s に更新しますか？」＋ 更新する / やめる）に切り替えるだけ
+        updateConfirmArmed_ = true;
+        return SettingsAction::None;
+    }
+    if (pressed_ == SettingsAction::UpdateConfirmNo) {
+        updateConfirmArmed_ = false;  // 確認をやめる
+        return SettingsAction::None;
+    }
+    // ここまで来たら確認の表示は終わり（Yes で実行するときも、ほかのボタンを押して取り消すときも）
+    updateConfirmArmed_ = false;
     return pressed_;
 }
 
@@ -384,6 +409,10 @@ bool SettingsPanel::tick(double now) {
 void SettingsPanel::armQuitForPreview() {
     quitArmed_ = true;
     quitArmedUntil_ = 1e300;
+}
+
+void SettingsPanel::armUpdateConfirmForPreview() {
+    updateConfirmArmed_ = true;
 }
 
 const SettingsPanel::Button* SettingsPanel::findButton(SettingsAction action) const {
@@ -626,7 +655,105 @@ void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const Config&
     pen.text(kPad, lineY, note, fitSize(pen, note, 17, 12, maxW, bold), noteColor, bold);
 }
 
-void SettingsPanel::render(const Config& config, const AutostartStatus& autostart) {
+void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Config& config,
+                                   const frame_updater::UpdateStatus& update) {
+    using frame_updater::UpdateState;
+
+    // 前フレームで置いたボタンを消してから、今の状態で要るものだけ置き直す（同じ場所に別のボタンが
+    // 重なって残らないように）
+    for (const SettingsAction a :
+         {SettingsAction::UpdateCheckNow, SettingsAction::UpdateInstall, SettingsAction::UpdateConfirmYes,
+          SettingsAction::UpdateConfirmNo, SettingsAction::UpdateRetry, SettingsAction::UpdateDismiss}) {
+        buttons_.erase(std::remove_if(buttons_.begin(), buttons_.end(), [a](const Button& b) { return b.action == a; }),
+                      buttons_.end());
+    }
+
+    const bool confirming = updateConfirmArmed_ && update.state == UpdateState::Available;
+    drawCard(pen, kPad, kUpdateBarY, kWidth - kPad * 2, kUpdateBarH, 16, kCard, kCard, 0);
+
+    /** バージョン番号の前に v を付ける。 */
+    const auto vtag = [](const std::string& v) { return "v" + v; };
+    /** printf 書式（%s が 1 つ）に版を当てはめる。 */
+    const auto format1 = [](const char* fmt, const std::string& value) {
+        char buf[192];
+        std::snprintf(buf, sizeof(buf), fmt, value.c_str());
+        return std::string(buf);
+    };
+
+    std::string headline;
+    Color color = kTextMuted;
+    bool bold = false;
+    std::vector<SettingsAction> right;  // 右に置くボタン（左から順）
+
+    if (confirming) {
+        headline = format1(text.updateConfirmFormat, vtag(update.latest));
+        color = kText;
+        bold = true;
+        right = {SettingsAction::UpdateConfirmNo, SettingsAction::UpdateConfirmYes};
+    } else {
+        switch (update.state) {
+            case UpdateState::Unknown:
+                headline = update.checking ? text.updateChecking : vtag(update.current);
+                if (!update.checking) right = {SettingsAction::UpdateCheckNow};
+                break;
+            case UpdateState::UpToDate:
+                headline = format1(text.updateUpToDateFormat, vtag(update.current));
+                if (!update.checking) right = {SettingsAction::UpdateCheckNow};
+                break;
+            case UpdateState::Available:
+                headline = format1(text.updateAvailableFormat, vtag(update.latest));
+                color = kWarn;
+                bold = true;
+                if (!update.installable) headline += std::string("  ") + text.updateManual;
+                if (update.installable) right.push_back(SettingsAction::UpdateInstall);
+                if (!update.checking) right.push_back(SettingsAction::UpdateCheckNow);
+                break;
+            case UpdateState::Installing:
+                headline = format1(text.updateInstallingFormat, updateStepText(config.language, update.step));
+                color = kText;
+                break;  // 進行中はボタンなし
+            case UpdateState::Installed:
+                headline = format1(text.updateInstalledFormat, vtag(update.version));
+                color = kSuccess;
+                bold = true;
+                right = {SettingsAction::UpdateDismiss};
+                break;
+            case UpdateState::CheckFailed:
+                headline = std::string(text.updateCheckFailed) + " " + updateErrorText(config.language, update.error) +
+                          "  " + text.updateLogHint;
+                color = kDanger;
+                if (!update.checking) right = {SettingsAction::UpdateCheckNow};
+                break;
+            case UpdateState::InstallFailed:
+                headline = std::string(text.updateInstallFailed) + " " + updateErrorText(config.language, update.error) +
+                          "  " + text.updateLogHint;
+                color = kDanger;
+                bold = true;
+                right = {SettingsAction::UpdateRetry, SettingsAction::UpdateDismiss};
+                break;
+        }
+    }
+
+    // 右のボタンを右詰めで置く（幅は文言に合わせる）
+    const double btnH = kUpdateBarH - 16;
+    const double btnY = kUpdateBarY + 8;
+    const double gap = 12;
+    double rightX = kWidth - kPad - kCardPad;
+    for (auto it = right.rbegin(); it != right.rend(); ++it) {
+        const double w = pen.measure(labelOf(*it, text), 22, true) + 32;
+        rightX -= w;
+        placeFooterButton(*it, rightX, btnY, w, btnH);
+        rightX -= gap;
+    }
+    const double textRight = right.empty() ? kWidth - kPad - kCardPad : rightX + gap;
+    const double maxTextW = textRight - (kPad + kCardPad);
+    const double size = fitSize(pen, headline, 22, 14, maxTextW, bold);
+    pen.text(kPad + kCardPad, centerBaseline(kUpdateBarY, kUpdateBarH, size), headline, size, color, bold);
+    for (const SettingsAction a : right) drawButton(pen, text, a, false, 20);
+}
+
+void SettingsPanel::render(const Config& config, const AutostartStatus& autostart,
+                            const frame_updater::UpdateStatus& update) {
     const Pen pen {cr_, &fonts_};
     const UiText& t = uiText(config.language);
 
@@ -639,9 +766,10 @@ void SettingsPanel::render(const Config& config, const AutostartStatus& autostar
     pen.roundedRect(0, 0, kWidth, kHeight, 24);
     cairo_fill(cr_);
 
-    // 上 = 見出しと状態のピル、左のカード = パネル、右のカード = 位置、その下の横長のカード = 向き、
-    // 下 = 言語・自動起動・終了と説明
+    // 上 = 見出しと状態のピル、その下 = 新しい版の確認の帯、左のカード = パネル、右のカード = 位置、
+    // その下の横長のカード = 向き、下 = 言語・自動起動・終了と説明
     drawHeader(pen, t, config);
+    drawUpdateBar(pen, t, config, update);
     drawPanelCard(pen, t, config);
     drawPositionCard(pen, t, config);
     drawFacingCard(pen, t, config);

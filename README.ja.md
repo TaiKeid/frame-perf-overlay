@@ -88,6 +88,7 @@ SteamVR が動いていれば、その場でパネルが出ます。SteamOS を�
   | アプリを終了 | 3 秒以内にもう一度押すと終了します |
 
   変更はすぐ反映され、設定ファイルに保存されます。
+- **更新**: 見出しのすぐ下の帯に、今の版がいつも出ています（例: `v0.2.0・最新の版です`）。［確認］を押すと、24 時間のキャッシュを無視してその場で GitHub に確かめに行きます（自動確認が off でも動きます）。自動確認は起動時と、そのあとは 1 日に 1 回まで。新しい版があれば「新しい版 0.2.1 があります」に変わり［更新］が出ます。押すと「0.2.1 に更新しますか？」の確認が 1 回出て、［更新する］で実際にインストールが始まります（［やめる］で取り消し）。インストール中は同じ帯に「ダウンロード中…」などの手順が出ます。途中でパネルが一度閉じて開き直すことがあります。失敗したときは理由と［もう一度］［閉じる］が出ます。リリースに `SHA256SUMS` が無い場合はここからは入れられないので、その旨とリリースページを示します。
 - **＋（プログラムを起動）**: ダッシュボードの＋の一覧に **Frame Perf Overlay** が出ます。動いていなければ起動し、すでに動いていれば、もう一度起動するたびにパネルの表示と非表示を切り替えます
 - **終わらせる**: ダッシュボードの下の **Perf** のアイコンにレーザーを合わせて「閉じる」を押すか、設定の「アプリを終了」を使います。安全な終了処理を通って終わり、次に SteamVR が起動するまで（または＋や `systemctl --user start frame-perf-overlay` で起動するまで）は止まったままです
 
@@ -100,6 +101,7 @@ SteamVR が動いていれば、その場でパネルが出ます。SteamOS を�
 | キー | 既定値 | 説明 |
 |---|---|---|
 | `visible` | `true` | `false` でパネルを隠す（値の読み取りと描画も止める） |
+| `update_check` | `true` | `false` で新しい版の自動での確認（1 日 1 回）を止める。Perf タブの［確認］ボタンはどちらでも使える |
 | `language` | Steam の言語 | `"ja"`（日本語）か `"en"`（English） |
 | `position.x` / `.y` / `.z` | `-0.15` / `-0.12` / `-0.5` | 頭から見たパネル中心の位置（m）。右が +x、上が +y、前が −z |
 | `rotation.yaw` / `.pitch` / `.roll` | `0` / `0` / `0` | パネルの回転（度）。`yaw` は左右の向き（正で面が右 = +x へ、−180〜180）、`pitch` は上下の傾き（正で面が上へ、−90〜90）、`roll` は画面内の回転（正で、面を見て反時計回り、−180〜180）。yaw → pitch → roll の順にかける。全部 0 で顔の正面と平行。「自分に向ける」と位置のボタンは yaw と pitch を決めて roll を 0 にする。roll はここでだけ変えられる |
@@ -134,9 +136,14 @@ systemctl --user enable frame-perf-overlay         # 自動起動を戻す
 
 ダッシュボードの「自動起動」のボタンは、同じ `enable` / `disable` を実行します（`--now` は付けないので、動いているパネルは止まりません）。サービスのファイルが入っていないとき（自分でビルドして `install.sh` を使っていないときなど）は、ボタンがグレーになってその旨が出ます。
 
+## 更新
+
+`install.sh` が小さな更新スクリプトを `~/.local/share/frame-perf-overlay/frame-update.sh` に置き、パネルはこれを裏で動かして GitHub の最新リリースを確かめ、確認したあとにダウンロード・インストールします。ダウンロード先は github.com・api.github.com・`*.githubusercontent.com` の HTTPS だけで、展開する前にリリースの `SHA256SUMS` でハッシュを確かめ、それが無いリリースは入れません（そのときは帯にその旨とリリースページを出します）。インストールは別の systemd のユニット（`frame-perf-overlay-update`）で行うので、途中でパネルが再起動しても続きます。ログは `~/.cache/frame-perf-overlay/update.log`。`update_check` を off にしても止まるのは 1 日 1 回の自動確認だけで、［確認］［更新］ボタンはそのまま使えます（[設定ファイル](#設定ファイル)を参照）。
+
 ## うまく動かないとき
 
 - **ログ**: `journalctl --user -u frame-perf-overlay -f`。`[VR] SteamVR につながりました` と出ていれば SteamVR につながっています
+- **更新が失敗する・止まったままになる**: `~/.cache/frame-perf-overlay/update.log`（帯のエラーにも出ます）と `journalctl --user -u frame-perf-overlay-update` を確かめてください。失敗・中断しても今の版はそのままです
 - **パネルが出ない**: SteamVR が動いているか（アプリは SteamVR を待つだけで、自分では起動しません）、Perf のタブで「表示」がオンか、サービスが動いているか（`systemctl --user status frame-perf-overlay`）を確かめてください。動いているときに＋から起動するとパネルが隠れるので、もう一度起動すると出ます
 - **＋の一覧に出ない**: `./install.sh` をもう一度実行して、`~/.local/share/applications/frame-perf-overlay.desktop` があるか確かめてください
 - **値が `--` になる**: そのセンサーが見つからないか、読めていません。センサーは起動時に名前で探すので、SteamOS の更新で名前が変わるとこうなります。`frame-perf-overlay --print` で見つかったものを一覧できます
@@ -174,9 +181,9 @@ systemctl --user enable frame-perf-overlay         # 自動起動を戻す
 
 ## プライバシー
 
-- テレメトリはなく、ヘッドセットの外とは一切通信しません（Wi-Fi の状態は、ヘッドセット自身のカーネルに問い合わせるだけです）
+- アプリ自体にテレメトリはありません。外部との通信は**新しい版の確認だけ**です: `api.github.com` に最新リリースを問い合わせ（起動時と、`update_check` が on の間は 1 日 1 回まで、［確認］を押せばすぐにも）、実際にインストールを確認したときだけ、リリースの tar.gz と `SHA256SUMS` を `github.com` / `*.githubusercontent.com` から HTTPS でダウンロードします。それ以外は何も送りません（GitHub 側からは、ふつうの匿名の HTTP リクエストとして、ヘッドセットの IP と `curl` の user agent が見えるだけです）。パネルに出す Wi-Fi の状態は、ヘッドセット自身のカーネルに問い合わせるだけで、外には出ません
 - Steam Link の直通回線については、ヘッドセット自身の Wi-Fi ドライバから、電波の強さ・リンク速度・送受信したバイト数だけを本体の中で読んで表示しています。PC やヘッドセットの MAC アドレスやネットワーク名（SSID）は、取り出さず、画面にもログにも出しません
-- 書き込むファイルは設定ファイルだけです（保存するときは、隣に一時ファイル `config.json.tmp` を書いてから置き換えます）。ほかに、アプリのプロセス ID を入れた小さなロックファイルを `/run/user/<uid>` に置きます（メモリ上だけのフォルダ。無い環境では `/tmp`）
+- 書き込むファイル: 設定ファイル（保存するときは、隣に一時ファイル `config.json.tmp` を書いてから置き換えます）、アプリのプロセス ID を入れた小さなロックファイル（`/run/user/<uid>`。メモリ上だけのフォルダ。無い環境では `/tmp`）、そして新しい版を確認・インストールしたときだけ、更新の仕組みが使うキャッシュ `~/.cache/frame-perf-overlay/`（前回確認した答え、インストールの進み具合・ログ。[更新](#更新)を参照）
 - ログはヘッドセットの中の systemd のジャーナルに残るだけです
 
 ## 免責事項
@@ -186,7 +193,8 @@ systemctl --user enable frame-perf-overlay         # 自動起動を戻す
 - AI（Claude）を使って作り、作者の Steam Frame で動作を確かめています。あなたの環境で同じように動くとは限りません
 - このアプリがヘッドセットの上ですること:
   - sysfs と `/proc` は**読むだけ**です（センサー、CPU、メモリ、自分のユーザーのプロセスについてカーネルが出している GPU の稼働時間）。そこへは書き込まず、ファン・クロック・電源の設定やカメラにも触りません。既定の言語を決めるために、起動時に 1 回だけ Steam の `~/.steam/registry.vdf` の `language` の行も読みます（読むだけ）
-  - 書き込むのは次のものだけです: 自分の設定ファイル、`install.sh` が入れる `~/.local` 以下のファイルと `~/.config/systemd/user` のサービスのファイル、「自動起動」のボタンを押したときの自分のサービスの `systemctl --user enable` / `disable`
+  - 書き込むのは次のものだけです: 自分の設定ファイル、`install.sh` が入れる `~/.local` 以下のファイルと `~/.config/systemd/user` のサービスのファイル、更新の仕組みが使うキャッシュ `~/.cache/frame-perf-overlay/`（[プライバシー](#プライバシー)を参照）、「自動起動」のボタンを押したときの自分のサービスの `systemctl --user enable` / `disable`
+  - 外部との通信は[プライバシー](#プライバシー)に書いた GitHub への更新の確認だけです。それ以外はどこにも通信しません
   - Steam や SteamVR のファイル・設定は変えません。ふつうの OpenVR のオーバーレイで、公開されている OpenVR の API だけを使います
 - このアプリは Steam や SteamVR のプロセスに手を入れず、改変や差し込みもしません。ほかの SteamVR のオーバーレイと同じように動き、Linux がふつうのユーザーに見せている情報を読むだけです。それでも Steam の使い方には [Steam 利用規約](https://store.steampowered.com/subscriber_agreement/?l=japanese)が適用されるので、気になる場合は読んだうえでご自身で判断してください
 
@@ -198,7 +206,7 @@ systemctl --user enable frame-perf-overlay         # 自動起動を戻す
 cmake -G Ninja -S . -B build
 cmake --build build
 ./install.sh               # build/frame-perf-overlay を入れる
-scripts/package.sh         # リリース用にビルドして dist/frame-perf-overlay-<バージョン>.tar.gz を作る
+scripts/package.sh         # リリース用にビルドして dist/frame-perf-overlay-<バージョン>.tar.gz と dist/SHA256SUMS を作る
 ```
 
 確認に便利なオプション（最後のもの以外は SteamVR なしで動きます）:
@@ -207,11 +215,24 @@ scripts/package.sh         # リリース用にビルドして dist/frame-perf-o
 ./build/frame-perf-overlay --print --count 5        # 読み取った値を 1 秒おきに 5 回表示
 ./build/frame-perf-overlay --dump-png panel.png --seconds 30 --fake-frames --language ja
 ./build/frame-perf-overlay --dump-settings-png settings.png --language ja
+./build/frame-perf-overlay --dump-settings-png update.png --preview-update available --language ja
 ./build/frame-perf-overlay --contrast-report        # 使っている色の組み合わせごとの WCAG のコントラスト比
 ./build/frame-perf-overlay --verbose                # オーバーレイとして動かし、数秒ごとに値をログに出す
 ```
 
-すべてのオプションは `--help` で見られます。バージョンは `CMakeLists.txt` の `project(... VERSION ...)` で決まり、`--version` で表示されます。
+すべてのオプションは `--help` で見られます（`--preview-update` の状態の一覧も）。バージョンは `CMakeLists.txt` の `project(... VERSION ...)` で決まり、`--version` で表示されます。
+
+`vendor/frame-updater/` は、非公開の共通の更新の仕組み（スクリプト、このアプリがビルドする C++ の部品、更新の帯の文言）のコピーです。ここでは編集しないでください。`scripts/package.sh` が元とずれていないか確かめます。
+
+## リリース（メンテナー向け）
+
+ヘッドセット上で `scripts/package.sh` を実行すると、Release でビルドし（先に `vendor/frame-updater/` が手で書き換えられていないか確かめます）、tar.gz を作って隣に `dist/SHA256SUMS` を書き出します。公開に使う正確なコマンドを最後に表示します:
+
+```sh
+gh release create v<バージョン> dist/frame-perf-overlay-<バージョン>.tar.gz dist/SHA256SUMS --title v<バージョン> --generate-notes
+```
+
+パネルの中の［更新］ボタンが使えるようにするには `SHA256SUMS` を必ず添付してください。無いと「ここからは入れられません」とリリースページを示すだけになります。
 
 ## ライセンス
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(frame-perf-overlay VERSION 0.1.0 LANGUAGES CXX)
+project(frame-perf-overlay VERSION 0.2.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,8 +31,9 @@ add_executable(frame-perf-overlay
   src/i18n.cpp
   src/autostart.cpp
   src/theme.cpp
+  vendor/frame-updater/cpp/update_check.cpp
 )
-target_include_directories(frame-perf-overlay PRIVATE third_party/openvr)
+target_include_directories(frame-perf-overlay PRIVATE third_party/openvr vendor/frame-updater/cpp)
 target_compile_options(frame-perf-overlay PRIVATE -Wall -Wextra)
 # --version で出すバージョン（上の project(VERSION) から）
 target_compile_definitions(frame-perf-overlay PRIVATE FRAME_PERF_OVERLAY_VERSION="${PROJECT_VERSION}")

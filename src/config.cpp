@@ -177,10 +177,11 @@ bool loadConfig(const std::string& path, Config& out, std::vector<std::string>& 
 
     Config config;  // 書かれていない項目は既定値
     warnUnknownKeys(root,
-                    {"visible", "language", "position", "rotation", "width_m", "alpha", "update_interval_ms", "graph_seconds",
-                     "font", "font_bold", "thresholds"},
+                    {"visible", "update_check", "language", "position", "rotation", "width_m", "alpha",
+                     "update_interval_ms", "graph_seconds", "font", "font_bold", "thresholds"},
                     "", warnings);
     readBool(root, "visible", config.visible, warnings);
+    readBool(root, "update_check", config.updateCheck, warnings);
     std::string language = languageCode(config.language);
     readString(root, "language", language, warnings);
     if (!parseLanguage(language, config.language)) warnings.push_back("language は \"ja\" か \"en\" で書いてください");
@@ -274,6 +275,7 @@ bool saveConfig(const std::string& path, const Config& config, std::string& erro
     std::ostringstream out;
     out << "{\n"
         << "  \"visible\": " << (config.visible ? "true" : "false") << ",\n"
+        << "  \"update_check\": " << (config.updateCheck ? "true" : "false") << ",\n"
         << "  \"language\": \"" << languageCode(config.language) << "\",\n"
         << "  \"position\": { \"x\": " << jsonNumber(config.posX) << ", \"y\": " << jsonNumber(config.posY)
         << ", \"z\": " << jsonNumber(config.posZ) << " },\n"

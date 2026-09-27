@@ -1,5 +1,6 @@
 {
   "visible": true,
+  "update_check": true,
   "language": "ja",
   "position": { "x": -0.15, "y": -0.12, "z": -0.5 },
   "rotation": { "yaw": 0, "pitch": 0, "roll": 0 },

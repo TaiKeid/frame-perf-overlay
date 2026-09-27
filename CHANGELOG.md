@@ -1,6 +1,15 @@
 # 変更履歴
 
-## 未リリース
+## 0.2.0
+
+### 更新
+
+- ダッシュボードの見出しのすぐ下に、新しい版の確認の帯を足した。今の版をいつも表示し（例:「v0.2.0・最新の版です」）、［確認］でキャッシュを無視してその場で GitHub に確かめに行く（`update_check` の設定が off でも押せる）。新しい版があれば［更新］が出て、「0.2.1 に更新しますか？」の確認を 1 回はさんでからインストールする。進み具合（ダウンロード中・確認中・展開中・入れ替え中）と、失敗したときの理由・やり直しもここに出す
+- 設定に `update_check`（既定 `true`）を足した。off にしても止まるのは 1 日 1 回の自動確認だけで、［確認］［更新］ボタンはそのまま使える
+- Steam Frame 用アプリ共通の更新の仕組み（非公開の frame-updater リポジトリ）を `vendor/frame-updater/` に取り込んだ。`frame-update.sh`（GitHub の最新リリースを確かめ、`SHA256SUMS` でハッシュを確かめてからインストールする POSIX sh）と、それを裏で動かす C++ の部品（`update_check.{h,cpp}`）
+- `install.sh` は `frame-update.sh` を `~/.local/share/frame-perf-overlay/` に置き、そのときのオプション（`--no-autostart` があれば）を `~/.config/frame-perf-overlay/install-args` に書き残す（次回の自動更新が同じオプションで `install.sh` を呼べるように）
+- `scripts/package.sh` は最初に `vendor/frame-updater/` が手で書き換えられていないか確かめ、リリースの tar.gz に `frame-update.sh` を入れ、隣に `SHA256SUMS` を書き出す。公開に使う `gh release create` の行を最後に表示する（実行はしない）
+- `--dump-settings-png` に `--preview-update`（uptodate / available / manual / confirm / installing / installed / checkfailed / installfailed）を足し、更新の帯の見た目を SteamVR なしで確認できるようにした
 
 ### 設定・操作
 

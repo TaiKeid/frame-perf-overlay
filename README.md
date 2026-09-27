@@ -89,6 +89,7 @@ Options:
   | Quit app | Click twice within 3 seconds to quit |
 
   Changes apply immediately and are saved to the settings file.
+- **Updates**: a bar right below the title always shows the running version, e.g. `v0.2.0 — up to date`, with a **Check** button that asks GitHub right away (it works even with automatic checking off). Automatic checking runs once at start and at most once a day. When a newer release exists it changes to `Version 0.2.1 is available` with an **Update** button; clicking it asks "Update to v0.2.1?" once, and **Update** in that confirmation starts the install (**Cancel** backs out). Progress ("Downloading…", "Verifying…", …) is shown in the same bar; the panel may briefly disappear and reappear while it restarts on the new version. If it fails, the bar shows the reason and **Try again** / **Close**. Releases without a `SHA256SUMS` file can't be installed this way; the bar says so and points at the release page instead.
 - **The + button** ("launch a program") in the dashboard lists **Frame Perf Overlay**. If it isn't running, this starts it. If it is already running, launching it again toggles the panel between shown and hidden.
 - **Quitting**: hover over the **Perf** icon at the bottom of the dashboard and press its close button, or use **Quit app** in the settings. It shuts down cleanly and stays off until the next SteamVR start (or until you start it from **+** or with `systemctl --user start frame-perf-overlay`).
 
@@ -101,6 +102,7 @@ A file with every key at its default value is in [`contrib/config.example.json`]
 | Key | Default | Meaning |
 |---|---|---|
 | `visible` | `true` | `false` hides the panel (and stops reading and drawing) |
+| `update_check` | `true` | `false` turns off the automatic daily check for a new release. The **Check** button in the Perf tab still works either way |
 | `language` | your Steam language | `"en"` (English) or `"ja"` (Japanese) |
 | `position.x` / `.y` / `.z` | `-0.15` / `-0.12` / `-0.5` | Panel center relative to your head, in meters. +x is right, +y is up, −z is forward |
 | `rotation.yaw` / `.pitch` / `.roll` | `0` / `0` / `0` | Panel rotation in degrees. `yaw` turns the face left/right (positive = toward +x, −180 to 180), `pitch` tilts it up/down (positive = up, −90 to 90), `roll` spins it in its own plane (positive = counterclockwise as you look at it, −180 to 180). Applied in the order yaw → pitch → roll. All 0 keeps the panel parallel to your face. "Face me" and the corner buttons set yaw and pitch and reset roll to 0; roll can only be set here |
@@ -135,9 +137,14 @@ systemctl --user enable frame-perf-overlay      # turn autostart back on
 
 The **Autostart** switch in the dashboard runs the same `enable` / `disable` (without `--now`, so the running panel stays up). If the service file isn't installed (for example when you built the program yourself and never ran `install.sh`), the switch is greyed out and says so.
 
+## Updates
+
+`install.sh` puts a small updater script at `~/.local/share/frame-perf-overlay/frame-update.sh`; the panel runs it in the background to ask GitHub's API for the latest release and, once you confirm, to download and install it. It downloads only from github.com / api.github.com / \*.githubusercontent.com over HTTPS, verifies the tar.gz against the release's `SHA256SUMS` file before extracting it, and refuses to install if that file is missing (the bar then points at the release page for a manual update instead). The install runs as a separate systemd unit (`frame-perf-overlay-update`) so it keeps going even though it restarts the panel; its log is `~/.cache/frame-perf-overlay/update.log`. Turning `update_check` off (see [Settings file](#settings-file)) only stops the once-a-day background check — the **Check** and **Update** buttons keep working.
+
 ## Troubleshooting
 
 - **Logs**: `journalctl --user -u frame-perf-overlay -f`. Log messages are in Japanese. `[VR] SteamVR につながりました` means it connected to SteamVR.
+- **Update fails or gets stuck**: check `~/.cache/frame-perf-overlay/update.log` (also shown in the bar's error message) and `journalctl --user -u frame-perf-overlay-update`. A failed or interrupted update leaves the current version untouched.
 - **No panel**: check that SteamVR is running (the app waits for it and never starts it by itself), that **Show** is on in the Perf tab, and that the service is running (`systemctl --user status frame-perf-overlay`). If you launched it from **+** while it was already running, that hid the panel; launch it again to show it.
 - **Not in the + list**: run `./install.sh` again and check that `~/.local/share/applications/frame-perf-overlay.desktop` exists.
 - **`--` instead of a value**: that sensor wasn't found or couldn't be read. The sensors are looked up by name when the app starts, so a SteamOS update that renames one shows up this way. `frame-perf-overlay --print` lists what was found.
@@ -175,9 +182,9 @@ Some values were checked against another source on a Steam Frame; others are est
 
 ## Privacy
 
-- The app has no telemetry and never communicates with anything outside the headset. (For the Wi-Fi status it only asks the headset's own kernel.)
+- The app itself has no telemetry. The **only** outside network access is the update check: it asks `api.github.com` for the latest release (once at start, at most once a day while `update_check` is on, or right away when you press **Check**), and, only after you confirm an install, downloads the release's tar.gz and `SHA256SUMS` from `github.com` / `*.githubusercontent.com` over HTTPS. Nothing else is sent; GitHub sees the usual anonymous HTTP request (your headset's IP, `curl`'s user agent). (For the Wi-Fi status shown in the panel it only asks the headset's own kernel — that never leaves the headset.)
 - For the Steam Link link it reads only the signal strength, link rates and byte counters, from the headset's own Wi-Fi driver. It doesn't extract, show or log the MAC address or network name (SSID) of the PC or the headset.
-- The only file it writes is its settings file (when saving, it writes a temporary `config.json.tmp` next to it and renames it), plus a small lock file in `/run/user/<uid>` (memory only; `/tmp` if that folder doesn't exist) that holds the app's process ID.
+- Files it writes: its own settings file (a temporary `config.json.tmp` next to it, renamed into place); a small lock file in `/run/user/<uid>` (memory only; `/tmp` if that folder doesn't exist) holding the app's process ID; and, only when checking or installing updates, the update helper's own cache files under `~/.cache/frame-perf-overlay/` (the last check's answer, install progress/log — see [Updates](#updates)).
 - Logs stay on the headset in the systemd journal.
 
 ## Disclaimer
@@ -187,7 +194,8 @@ Some values were checked against another source on a Steam Frame; others are est
 - It was made with an AI assistant (Claude) and tested on the author's own Steam Frame. It may not behave the same on yours.
 - What it does on your headset:
   - It only **reads** from sysfs and `/proc` (sensors, CPU, memory, and the GPU time the kernel reports for your own processes). It never writes there, and it doesn't touch fans, clocks, power settings or cameras. To pick the default language it also reads the `language` line of Steam's `~/.steam/registry.vdf` once at startup (read only).
-  - It writes only: its own settings file; the files `install.sh` puts under `~/.local` and the service file under `~/.config/systemd/user`; and, when you use the **Autostart** switch, `systemctl --user enable` / `disable` for its own service.
+  - It writes only: its own settings file; the files `install.sh` puts under `~/.local` and the service file under `~/.config/systemd/user`; the update helper's cache files under `~/.cache/frame-perf-overlay/` (see [Privacy](#privacy)); and, when you use the **Autostart** switch, `systemctl --user enable` / `disable` for its own service.
+  - Its only outside network access is the GitHub update check described in [Privacy](#privacy) — nothing else it does talks to any server, on or off the headset.
   - It doesn't change any Steam or SteamVR files or settings. It is an ordinary OpenVR overlay and uses only the public OpenVR API.
 - The app doesn't modify or inject into Steam or SteamVR; it works like any other SteamVR overlay app and reads information that Linux gives to normal users. The [Steam Subscriber Agreement](https://store.steampowered.com/subscriber_agreement/) still applies to how you use Steam, so if you have doubts, read it and decide for yourself.
 
@@ -199,7 +207,7 @@ Build on the headset (the program links against SteamOS's cairo, FreeType, libnl
 cmake -G Ninja -S . -B build
 cmake --build build
 ./install.sh               # installs build/frame-perf-overlay
-scripts/package.sh         # release build: dist/frame-perf-overlay-<version>.tar.gz
+scripts/package.sh         # release build: dist/frame-perf-overlay-<version>.tar.gz, dist/SHA256SUMS
 ```
 
 Useful options (all of them work without SteamVR, except the last one):
@@ -208,11 +216,24 @@ Useful options (all of them work without SteamVR, except the last one):
 ./build/frame-perf-overlay --print --count 5        # print the readings once a second, 5 times
 ./build/frame-perf-overlay --dump-png panel.png --seconds 30 --fake-frames --language en
 ./build/frame-perf-overlay --dump-settings-png settings.png --language en
+./build/frame-perf-overlay --dump-settings-png update.png --preview-update available --language en
 ./build/frame-perf-overlay --contrast-report        # WCAG contrast of every color pair used
 ./build/frame-perf-overlay --verbose                # run as the overlay and log the values every few seconds
 ```
 
-`--help` lists every option. The version is set in `CMakeLists.txt` (`project(... VERSION ...)`) and shown by `--version`.
+`--help` lists every option, including every `--preview-update` state. The version is set in `CMakeLists.txt` (`project(... VERSION ...)`) and shown by `--version`.
+
+`vendor/frame-updater/` is a copy of a private, shared updater project (script, the C++ helper this app builds against, and the strings shown in the update bar). Don't edit it here — it's checked against its source by `scripts/package.sh`.
+
+## Release (maintainer)
+
+On the headset: `scripts/package.sh` builds a Release binary, stages the tar.gz and writes `dist/SHA256SUMS` next to it (after checking `vendor/frame-updater/` wasn't hand-edited). It prints the exact command to publish, which is:
+
+```sh
+gh release create v<version> dist/frame-perf-overlay-<version>.tar.gz dist/SHA256SUMS --title v<version> --generate-notes
+```
+
+`SHA256SUMS` has to be attached for the in-panel **Update** button to work; without it the bar tells users to update by hand from the release page.
 
 ## License
 

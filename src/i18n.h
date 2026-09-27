@@ -94,6 +94,26 @@ struct UiText {
     const char* pitchName;
     const char* rollName;
     const char* footer;         ///< 変更はすぐ反映される旨
+    // ---- 更新（vendor/frame-updater/strings.md より） ----
+    const char* rowUpdateCheck;          ///< 設定ファイルの説明用（「新しい版の確認」）
+    const char* updateUpToDateFormat;    ///< `UpToDate`（%s は版）
+    const char* updateChecking;          ///< `checking` で、まだ答えがない
+    const char* updateAvailableFormat;   ///< `Available`（%s は版）
+    const char* updateButton;            ///< 「更新する」を押す（確認へ）
+    const char* updateManual;            ///< `installable` が false のときの案内
+    const char* updateReleasePage;       ///< リリースページの URL の前
+    const char* updateConfirmFormat;     ///< 確認の質問（%s は版）
+    const char* updateConfirmHint;       ///< 確認の補足
+    const char* updateConfirmYes;        ///< 確認の実行ボタン
+    const char* updateConfirmNo;         ///< 確認のやめるボタン
+    const char* updateInstallingFormat;  ///< `Installing`（%s は下の手順の文言）
+    const char* updateInstalledFormat;   ///< `Installed`（%s は版）
+    const char* updateInstallFailed;     ///< `InstallFailed` の見出し（理由が続く）
+    const char* updateCheckFailed;       ///< `CheckFailed` の見出し（理由が続く）
+    const char* updateCheckNow;          ///< ［確認］ボタン（幅が狭いので短くしてある）
+    const char* updateRetry;             ///< `InstallFailed` のやり直しボタン
+    const char* updateDismiss;           ///< `Installed` / `InstallFailed` を閉じる
+    const char* updateLogHint;           ///< 失敗したときの補足（ログの場所）
 };
 
 /**
@@ -129,6 +149,22 @@ std::string thermalBadgeText(Language language, bool cpu, bool gpu);
  * @return 文言
  */
 std::string batteryStatusText(Language language, const std::string& status, bool chargerOnline);
+
+/**
+ * 更新の手順（`UpdateStatus::step`）を文言にする。知らない手順はそのまま返す。
+ * @param language 言語
+ * @param step "start" / "download" / "verify" / "extract" / "install"
+ * @return 文言
+ */
+std::string updateStepText(Language language, const std::string& step);
+
+/**
+ * 更新のエラーコード（`UpdateStatus::error`）を文言にする。知らないコードは「other」の文言にする。
+ * @param language 言語
+ * @param error frame-update.sh / update_check.h のエラーコード
+ * @return 文言
+ */
+std::string updateErrorText(Language language, const std::string& error);
 
 /**
  * 設定ファイルに書く言語の名前。

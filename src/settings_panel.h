@@ -3,6 +3,7 @@
 
 #include "autostart.h"
 #include "config.h"
+#include "update_check.h"  // vendor/frame-updater/cpp（CMake の include dir で見つかる）
 
 #include <cstdint>
 #include <string>
@@ -46,6 +47,12 @@ enum class SettingsAction {
     Quit,  ///< アプリを終了（2 回目の押下で確定したときだけ返る）
     AutostartOn,   ///< 自動起動を有効に（systemctl --user enable）
     AutostartOff,  ///< 自動起動を無効に（systemctl --user disable）
+    UpdateCheckNow,     ///< ［確認］: 24 時間のキャッシュを無視してその場で確かめる（呼び出し側で扱う）
+    UpdateInstall,      ///< ［更新］の 1 回目: 確認の表示に切り替えるだけ
+    UpdateConfirmYes,   ///< 確認の「更新する」: 実際にインストールを始める（呼び出し側で扱う）
+    UpdateConfirmNo,    ///< 確認の「やめる」: 確認を取り消す
+    UpdateRetry,        ///< 失敗のあとの「もう一度」（呼び出し側で扱う）
+    UpdateDismiss,      ///< 「入れました」/「失敗しました」の表示を閉じる（呼び出し側で扱う）
 };
 
 /**
@@ -76,8 +83,9 @@ public:
      * 今の設定と、ポインターが乗っている・押しているボタンの状態でパネルを描く。
      * @param config 今の設定（言語もここから）
      * @param autostart 自動起動の今の状態
+     * @param update 新しい版の確認・インストールの今の状態
      */
-    void render(const Config& config, const AutostartStatus& autostart);
+    void render(const Config& config, const AutostartStatus& autostart, const frame_updater::UpdateStatus& update);
 
     /**
      * ポインターが動いた。
@@ -133,6 +141,11 @@ public:
      */
     void armQuitForPreview();
 
+    /**
+     * 見た目の確認用に、更新の確認（「%s に更新しますか？」）の状態にする（--dump-settings-png 用）。
+     */
+    void armUpdateConfirmForPreview();
+
     /** @return 画像の幅（px） */
     int width() const;
     /** @return 画像の高さ（px） */
@@ -155,6 +168,7 @@ private:
     SettingsAction pressed_ = SettingsAction::None;
     bool quitArmed_ = false;
     double quitArmedUntil_ = 0.0;
+    bool updateConfirmArmed_ = false;  ///< 「更新する」を 1 回押して、確認の表示を出している間
 
     /** 左右と向きのカードのボタンの配置を作る（起動時に 1 回。下の段は render() のたびに置き直す）。 */
     void layoutButtons();
@@ -183,7 +197,8 @@ private:
     const Button* findButton(SettingsAction action) const;
 
     /**
-     * 下の段のボタンを置く（見出しの幅が言語で変わるので、描くたびに位置を決め直す）。
+     * 下の段・更新の帯のボタンを置く（文言の幅が言語や状態で変わるので、描くたびに位置を決め直す）。
+     * 既にあるボタンは位置を置き直すだけ、無ければ足す。
      * @param action 操作
      * @param x 左
      * @param y 上
@@ -254,6 +269,15 @@ private:
      * @param autostart 自動起動の今の状態
      */
     void drawFooter(const Pen& pen, const UiText& text, const Config& config, const AutostartStatus& autostart);
+
+    /**
+     * 見出しのすぐ下に出す、新しい版の確認・インストールの帯（いつも見えている 1 行 ＋ 右のボタン）。
+     * @param pen 描画の道具
+     * @param text 言語の表
+     * @param config 今の設定
+     * @param update 新しい版の確認・インストールの今の状態
+     */
+    void drawUpdateBar(const Pen& pen, const UiText& text, const Config& config, const frame_updater::UpdateStatus& update);
 };
 
 /**

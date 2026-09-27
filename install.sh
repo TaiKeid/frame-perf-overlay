@@ -135,6 +135,22 @@ refresh_caches
 install -Dm644 "$here/contrib/$unit" "$unit_dir/$unit"
 systemctl --user daemon-reload
 
+# 更新の仕組み（vendor/frame-updater/frame-update.sh を ~/.local/share/<name>/ に置く。無ければ、この版で
+# は入れ替え済みなのでボタンでの更新は使えないが、それ以外はふつうに動く）
+update_script="$here/vendor/frame-updater/frame-update.sh"
+if [[ -f "$update_script" ]]; then
+    install -Dm755 "$update_script" "$data_home/$name/frame-update.sh"
+else
+    echo "Warning: $update_script not found. Update from the dashboard won't work until you install a release that includes it." >&2
+fi
+
+# 次回の自動更新（frame-update.sh install）が使うオプションを書き残す（--uninstall 以外。1 行 1 つ、# はコメント）
+mkdir -p "$config_dir"
+install_args="$config_dir/install-args"
+: >"$install_args.new"
+[[ "$autostart" == 0 ]] && echo "--no-autostart" >>"$install_args.new"
+mv -f "$install_args.new" "$install_args"
+
 steamvr_running=0
 if systemctl --user is-active --quiet steamvr.service; then
     steamvr_running=1
@@ -170,6 +186,7 @@ else
 fi
 cat <<EOF
   Settings: SteamVR dashboard > Perf, or $config_dir/config.json
+  Updates:  the Perf tab shows the version and checks GitHub for a newer one (once a day; "update_check": false in config.json to turn that off, the Check button still works)
   Logs:     journalctl --user -u $name -f
   Remove:   ./install.sh --uninstall
 EOF

@@ -38,6 +38,7 @@ struct Thresholds {
  */
 struct Config {
     bool visible = true;            ///< false でパネルを隠す（読み取りと描画も止める）
+    bool updateCheck = true;        ///< false で新しい版の自動確認を止める（手動の［確認］は常に使える）
     Language language = systemLanguage();  ///< 画面の文言の言語（"ja" / "en"。既定は Frame のシステム言語）
     double posX = -0.15;            ///< HMD 基準の位置（m）。右が +x
     double posY = -0.12;            ///< 上が +y
