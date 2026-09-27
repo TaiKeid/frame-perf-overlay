@@ -87,6 +87,8 @@ struct UiText {
     const char* yawRight;       ///< 面を右へ向ける
     const char* pitchUp;        ///< 面を上へ向ける
     const char* pitchDown;      ///< 面を下へ向ける
+    const char* rollLeft;       ///< 画面内で左に回す（反時計回り）
+    const char* rollRight;      ///< 画面内で右に回す（時計回り）
     const char* faceMe;         ///< 自分に向ける
     const char* faceForward;    ///< 正面向き（回転なし）
     const char* angleStep1;     ///< 向きのボタンを 1° ずつ動かす

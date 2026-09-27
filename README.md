@@ -82,8 +82,9 @@ Options:
   | ← Left / Right → / ↑ Up / ↓ Down | Nudge the panel by 2 cm. The facing stays as it is |
   | Closer / Farther | Move it 5 cm nearer or further (20 cm to 3 m), keeping the direction |
   | Facing: ← Left / Right → / ↑ Up / ↓ Down | Turn the panel's face by the chosen step (left/right up to ±180°, up/down up to ±90°). It snaps to the step: at 16.7°, By 5° goes to 20° or 15° |
-  | By 1° / By 5° | How far one press of the facing arrows turns the panel. Starts at 1° each time the app starts (not saved) |
-  | Face me | Keep the position and turn the panel so it faces your head |
+  | ⟲ Rotate L / Rotate R ⟳ | Spin the panel in its own plane (roll) by the chosen step, counterclockwise / clockwise as you look at it (up to ±180°). Use it if the panel doesn't look level to you |
+  | By 1° / By 5° | How far one press of the facing arrows and the rotate buttons turns the panel. Starts at 1° each time the app starts (not saved) |
+  | Face me | Keep the position and turn the panel so it faces your head. The rotation from Rotate L / R (roll) is kept |
   | Face ahead | Remove the rotation, so the panel is parallel to your face again (the look before this feature) |
   | Language | English or Japanese, applied immediately |
   | Autostart: On / Off | Turn the systemd service on or off. Takes effect from the next SteamVR start |
@@ -106,7 +107,7 @@ A file with every key at its default value is in [`contrib/config.example.json`]
 | `update_check` | `true` | `false` turns off the automatic daily check for a new release. The **Check now** button in the Perf tab still works either way |
 | `language` | your Steam language | `"en"` (English) or `"ja"` (Japanese) |
 | `position.x` / `.y` / `.z` | `-0.15` / `-0.12` / `-0.5` | Panel center relative to your head, in meters. +x is right, +y is up, −z is forward |
-| `rotation.yaw` / `.pitch` / `.roll` | `0` / `0` / `0` | Panel rotation in degrees. `yaw` turns the face left/right (positive = toward +x, −180 to 180), `pitch` tilts it up/down (positive = up, −90 to 90), `roll` spins it in its own plane (positive = counterclockwise as you look at it, −180 to 180). Applied in the order yaw → pitch → roll. All 0 keeps the panel parallel to your face. "Face me" and the corner buttons set yaw and pitch and reset roll to 0; roll can only be set here |
+| `rotation.yaw` / `.pitch` / `.roll` | `0` / `0` / `0` | Panel rotation in degrees. `yaw` turns the face left/right (positive = toward +x, −180 to 180), `pitch` tilts it up/down (positive = up, −90 to 90), `roll` spins it in its own plane (positive = counterclockwise as you look at it, −180 to 180). Applied in the order yaw → pitch → roll. All 0 keeps the panel parallel to your face. "Face me" and the corner buttons set yaw and pitch and keep roll as it is |
 | `width_m` | `0.2` | Panel width in meters. The height follows from the aspect ratio (512 × 434) |
 | `alpha` | `0.9` | Opacity of the whole panel (0 to 1) |
 | `update_interval_ms` | `500` | Update interval (100 to 5000 ms) |

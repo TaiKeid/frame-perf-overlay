@@ -71,7 +71,7 @@ const UiText kJapanese = {
     "← 左", "右 →", "↑ 上", "↓ 下", "近く", "遠く",
     "既定に戻す", "アプリを終了", "もう一度押すと終了",
     "いまの位置", "横", "縦", "前",
-    "向き", "← 左向き", "右向き →", "↑ 上向き", "↓ 下向き", "自分に向ける", "正面向き", "1° ずつ", "5° ずつ",
+    "向き", "← 左向き", "右向き →", "↑ 上向き", "↓ 下向き", "左に回す", "右に回す", "自分に向ける", "正面向き", "1° ずつ", "5° ずつ",
     "いまの向き", "左右", "上下", "回転",
     "変更はすぐ反映され、設定ファイルに保存されます",
     // 更新
@@ -105,7 +105,7 @@ const UiText kEnglish = {
     "← Left", "Right →", "↑ Up", "↓ Down", "Closer", "Farther",
     "Reset", "Quit app", "Press again to quit",
     "Now", "x", "y", "z",
-    "Facing", "← Left", "Right →", "↑ Up", "↓ Down", "Face me", "Face ahead", "By 1°", "By 5°",
+    "Facing", "← Left", "Right →", "↑ Up", "↓ Down", "Rotate L", "Rotate R", "Face me", "Face ahead", "By 1°", "By 5°",
     "Now", "yaw", "pitch", "roll",
     "Changes apply instantly and are saved",
     // Updates

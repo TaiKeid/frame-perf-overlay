@@ -143,6 +143,46 @@ std::string signedDegrees(double degrees) {
 }
 
 /**
+ * 回す向きの絵（すき間が上にある円弧 ＋ 矢じり）を線で描く。画面の上で反時計回りなら ⟲、時計回りなら ⟳。
+ * @param cr cairo
+ * @param cx 中心の x
+ * @param cy 中心の y
+ * @param r 半径
+ * @param counterclockwise 反時計回り（⟲）なら true
+ * @param c 色
+ */
+void drawRotateArrow(cairo_t* cr, double cx, double cy, double r, bool counterclockwise, Color c) {
+    const double deg = M_PI / 180.0;
+    // 画面の座標は y が下向きなので、角度が増える向き（cairo_arc）が時計回り。
+    // ⟲: 左上（240°）から反時計回りに左・下・右を回って右上（300° = −60°）で終わる。⟳ はその左右反転
+    const double start = counterclockwise ? 240 * deg : 300 * deg;
+    const double end = counterclockwise ? -60 * deg : 600 * deg;
+    cairo_save(cr);
+    cairo_set_source_rgb(cr, c.r, c.g, c.b);
+    cairo_set_line_width(cr, r * 0.3);
+    cairo_set_line_cap(cr, CAIRO_LINE_CAP_ROUND);
+    cairo_new_path(cr);
+    if (counterclockwise) {
+        cairo_arc_negative(cr, cx, cy, r, start, end);
+    } else {
+        cairo_arc(cr, cx, cy, r, start, end);
+    }
+    cairo_stroke(cr);
+    // 矢じり: 終わりの点で、進む向き（円の接線）に向ける
+    const double px = cx + r * std::cos(end);
+    const double py = cy + r * std::sin(end);
+    const double dx = counterclockwise ? std::sin(end) : -std::sin(end);
+    const double dy = counterclockwise ? -std::cos(end) : std::cos(end);
+    const double head = r * 0.9;
+    cairo_move_to(cr, px + dx * head, py + dy * head);
+    cairo_line_to(cr, px - dx * head * 0.35 - dy * head * 0.75, py - dy * head * 0.35 + dx * head * 0.75);
+    cairo_line_to(cr, px - dx * head * 0.35 + dy * head * 0.75, py - dy * head * 0.35 - dx * head * 0.75);
+    cairo_close_path(cr);
+    cairo_fill(cr);
+    cairo_restore(cr);
+}
+
+/**
  * 回転なし（0, 0, 0）か。
  * @param config 設定
  * @return 3 つとも 0 なら true
@@ -195,6 +235,9 @@ bool applySettingsAction(SettingsAction action, Config& config, double angleStep
         case SettingsAction::YawRight: config.yawDeg = stepAngle(config.yawDeg, +1, 180.0, angleStepDeg); break;
         case SettingsAction::PitchUp: config.pitchDeg = stepAngle(config.pitchDeg, +1, 90.0, angleStepDeg); break;
         case SettingsAction::PitchDown: config.pitchDeg = stepAngle(config.pitchDeg, -1, 90.0, angleStepDeg); break;
+        // roll は正で、面を見て反時計回り（⟲）
+        case SettingsAction::RollLeft: config.rollDeg = stepAngle(config.rollDeg, +1, 180.0, angleStepDeg); break;
+        case SettingsAction::RollRight: config.rollDeg = stepAngle(config.rollDeg, -1, 180.0, angleStepDeg); break;
         case SettingsAction::FaceMe: faceHead(config); break;
         case SettingsAction::FaceForward:
             config.yawDeg = 0.0;
@@ -295,7 +338,9 @@ void SettingsPanel::layoutButtons() {
     // 右の上の段は刻みの 1° / 5° の切り替え、下の段は自分に向ける / 正面向き
     const double facingCol[3] = {kFacingCardX + kCardPad, kFacingCardX + kCardPad + kFacingArrowW + kPresetGap,
                                  kFacingCardX + kCardPad + 2 * (kFacingArrowW + kPresetGap)};
+    add(SettingsAction::RollLeft, facingCol[0], kFacingRowY, kFacingArrowW, kButtonH);
     add(SettingsAction::PitchUp, facingCol[1], kFacingRowY, kFacingArrowW, kButtonH);
+    add(SettingsAction::RollRight, facingCol[2], kFacingRowY, kFacingArrowW, kButtonH);
     add(SettingsAction::YawLeft, facingCol[0], kFacingRow2Y, kFacingArrowW, kButtonH);
     add(SettingsAction::PitchDown, facingCol[1], kFacingRow2Y, kFacingArrowW, kButtonH);
     add(SettingsAction::YawRight, facingCol[2], kFacingRow2Y, kFacingArrowW, kButtonH);
@@ -328,6 +373,8 @@ std::string SettingsPanel::labelOf(SettingsAction action, const UiText& text) co
         case SettingsAction::YawRight: return text.yawRight;
         case SettingsAction::PitchUp: return text.pitchUp;
         case SettingsAction::PitchDown: return text.pitchDown;
+        case SettingsAction::RollLeft: return text.rollLeft;
+        case SettingsAction::RollRight: return text.rollRight;
         case SettingsAction::FaceMe: return text.faceMe;
         case SettingsAction::FaceForward: return text.faceForward;
         case SettingsAction::AngleStep1: return text.angleStep1;
@@ -492,7 +539,7 @@ void SettingsPanel::drawSegmented(const Pen& pen, const UiText& text, SettingsAc
 }
 
 void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsAction action, bool selected,
-                               double size) const {
+                               double size, int rotateIcon) const {
     const Button* b = findButton(action);
     if (b == nullptr) return;
     const bool pressed = pressed_ == action;
@@ -512,11 +559,18 @@ void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsActio
     }
     const std::string label = labelOf(action, text);
     const double checkW = selected ? size * 0.9 : 0;
-    const double labelSize = fitSize(pen, label, size, size * 0.65, b->w - 20 - checkW, true);
-    const double textW = pen.measure(label, labelSize, true) + checkW;
-    const double tx = b->x + (b->w - textW) / 2;
+    const double iconW = rotateIcon != 0 ? size * 1.15 : 0;  // 回す向きの絵と、文言との間
+    const double labelSize = fitSize(pen, label, size, size * 0.65, b->w - 20 - checkW - iconW, true);
+    const double labelW = pen.measure(label, labelSize, true);
+    const double tx = b->x + (b->w - labelW - checkW - iconW) / 2;
+    const Color fg = selected ? kOnAccent : kText;
     if (selected) drawCheck(pen.cr, tx + checkW * 0.4, b->y + b->h / 2, size * 0.72, kOnAccent);
-    pen.text(tx + checkW, centerBaseline(b->y, b->h, labelSize), label, labelSize, selected ? kOnAccent : kText, true);
+    const double labelX = tx + checkW + (rotateIcon < 0 ? iconW : 0);
+    if (rotateIcon != 0) {
+        const double iconCx = rotateIcon < 0 ? tx + checkW + size * 0.45 : labelX + labelW + size * 0.7;
+        drawRotateArrow(pen.cr, iconCx, b->y + b->h / 2, size * 0.4, rotateIcon < 0, fg);
+    }
+    pen.text(labelX, centerBaseline(b->y, b->h, labelSize), label, labelSize, fg, true);
 }
 
 void SettingsPanel::drawHeader(const Pen& pen, const UiText& text, const Config& config) const {
@@ -591,10 +645,10 @@ void SettingsPanel::drawPositionCard(const Pen& pen, const UiText& text, const C
 void SettingsPanel::drawFacingCard(const Pen& pen, const UiText& text, const Config& config) const {
     drawCard(pen, kFacingCardX, kFacingCardY, kFacingCardW, kFacingCardH, 20, kCard, kCard, 0);
     pen.text(kFacingCardX + kCardPad, kFacingCardY + 42, text.cardFacing, 24, kText, true);
-    // いまの向き（度）を見出しの右に。roll は設定ファイルでだけ変えるので、0 でないときだけ出す
-    std::string now = std::string(text.facingNow) + "  " + text.yawName + " " + signedDegrees(config.yawDeg) + "  " +
-                      text.pitchName + " " + signedDegrees(config.pitchDeg);
-    if (std::lround(config.rollDeg) != 0) now += std::string("  ") + text.rollName + " " + signedDegrees(config.rollDeg);
+    // いまの向き（度）を見出しの右に
+    const std::string now = std::string(text.facingNow) + "  " + text.yawName + " " + signedDegrees(config.yawDeg) +
+                            "  " + text.pitchName + " " + signedDegrees(config.pitchDeg) + "  " + text.rollName + " " +
+                            signedDegrees(config.rollDeg);
     const double nowSize = fitSize(pen, now, 18, 13, kFacingCardW - kCardPad * 2 - 160, false);
     pen.text(kFacingCardX + kFacingCardW - kCardPad, kFacingCardY + 40, now, nowSize, kTextMuted, false, true);
 
@@ -602,6 +656,8 @@ void SettingsPanel::drawFacingCard(const Pen& pen, const UiText& text, const Con
          {SettingsAction::YawLeft, SettingsAction::YawRight, SettingsAction::PitchUp, SettingsAction::PitchDown}) {
         drawButton(pen, text, action, false, 24);
     }
+    drawButton(pen, text, SettingsAction::RollLeft, false, 24, -1);
+    drawButton(pen, text, SettingsAction::RollRight, false, 24, +1);
     drawSegmented(pen, text, SettingsAction::AngleStep1, SettingsAction::AngleStep5, angleStepDeg_ == 5.0 ? 1 : 0,
                   true);
     // 今その向きになっていれば ✓（位置のプリセットと同じ見せ方）

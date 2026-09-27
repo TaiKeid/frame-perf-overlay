@@ -37,7 +37,9 @@ enum class SettingsAction {
     YawRight,     ///< 面を右へ向ける（yaw を増やす）
     PitchUp,      ///< 面を上へ向ける（pitch を増やす）
     PitchDown,    ///< 面を下へ向ける（pitch を減らす）
-    FaceMe,       ///< 今の位置のまま、面を頭に向ける
+    RollLeft,     ///< 画面内で左に回す（面を見て反時計回り。roll を増やす）
+    RollRight,    ///< 画面内で右に回す（面を見て時計回り。roll を減らす）
+    FaceMe,       ///< 今の位置のまま、面を頭に向ける（roll はそのまま）
     FaceForward,  ///< 回転なし（0, 0, 0）に戻す
     AngleStep1,   ///< 向きのボタンの刻みを 1° に（設定パネルの中だけで扱う）
     AngleStep5,   ///< 向きのボタンの刻みを 5° に（設定パネルの中だけで扱う）
@@ -236,8 +238,11 @@ private:
      * @param action 操作
      * @param selected 選ばれている（位置のボタン）ならアクセントの塗り ＋ ✓
      * @param size 文字の大きさ（入りきらなければ小さくする）
+     * @param rotateIcon 回す向きの絵（-1 = 文言の左に反時計回り ⟲、+1 = 文言の右に時計回り ⟳、0 = なし）。
+     *                   フォントに ⟲ ⟳ の字が無いので線で描く
      */
-    void drawButton(const Pen& pen, const UiText& text, SettingsAction action, bool selected, double size) const;
+    void drawButton(const Pen& pen, const UiText& text, SettingsAction action, bool selected, double size,
+                    int rotateIcon = 0) const;
 
     /**
      * 見出しと、右上の状態のピル（● パネル表示中 / ○ パネル非表示）を描く。
@@ -264,7 +269,8 @@ private:
     void drawPositionCard(const Pen& pen, const UiText& text, const Config& config) const;
 
     /**
-     * 下の横長のカード「向き」（左右・上下の向きの十字、刻みの 1° / 5°、自分に向ける、正面向き、いまの向き）を描く。
+     * 下の横長のカード「向き」（左右・上下の向きの十字と、その上の角の左に回す / 右に回す、刻みの 1° / 5°、
+     * 自分に向ける、正面向き、いまの向き）を描く。
      * @param pen 描画の道具
      * @param text 言語の表
      * @param config 今の設定

@@ -396,15 +396,13 @@ void faceHead(Config& config) {
     headFacingAngles(config, yaw, pitch);
     config.yawDeg = roundTenthDegree(yaw);
     config.pitchDeg = roundTenthDegree(pitch);
-    config.rollDeg = 0.0;
 }
 
 bool isFacingHead(const Config& config) {
     double yaw = 0.0;
     double pitch = 0.0;
     headFacingAngles(config, yaw, pitch);
-    return std::fabs(config.yawDeg - yaw) < 0.25 && std::fabs(config.pitchDeg - pitch) < 0.25 &&
-           std::fabs(config.rollDeg) < 0.05;
+    return std::fabs(config.yawDeg - yaw) < 0.25 && std::fabs(config.pitchDeg - pitch) < 0.25;
 }
 
 void ConfigWatcher::noteSaved() {

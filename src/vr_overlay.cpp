@@ -311,9 +311,10 @@ void VrOverlay::logFacingCheck(const Config& config) const {
     const double distance = std::sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
     std::fprintf(stderr,
                  "[向き] 位置 (%.3f, %.3f, %.3f) yaw %.1f pitch %.1f roll %.1f | 計算した表の向き (%.3f, %.3f, %.3f)・"
-                 "頭への向きとの内積 %.4f\n",
+                 "頭への向きとの内積 %.4f | 計算したパネルの +x 軸 (%.3f, %.3f, %.3f)\n",
                  pos[0], pos[1], pos[2], config.yawDeg, config.pitchDeg, config.rollDeg, r[0][2], r[1][2], r[2][2],
-                 distance > 0 ? -(r[0][2] * pos[0] + r[1][2] * pos[1] + r[2][2] * pos[2]) / distance : 0.0);
+                 distance > 0 ? -(r[0][2] * pos[0] + r[1][2] * pos[1] + r[2][2] * pos[2]) / distance : 0.0, r[0][0],
+                 r[1][0], r[2][0]);
 
     // 狙う点（HMD 基準）: 中心、パネル自身の +x に 2cm、+y に 2cm
     const char* names[3] = {"中心", "パネルの+x 2cm", "パネルの+y 2cm"};

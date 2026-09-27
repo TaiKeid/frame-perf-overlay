@@ -100,7 +100,8 @@ void resetDisplaySettings(Config& config);
 void panelRotation(const Config& config, double r[3][3]);
 
 /**
- * 今の位置のまま、パネルの表が頭（HMD 基準の原点）を向くように yaw と pitch を決める。roll は 0 にする。
+ * 今の位置のまま、パネルの表が頭（HMD 基準の原点）を向くように yaw と pitch を決める。roll は今の値のまま残す
+ * （ユーザーが合わせた傾きを消さない。Rz(roll) は (0,0,1) を動かさないので、roll があっても表の向きは同じ）。
  * 表の向き（法線）は R·(0,0,1) = (sin yaw·cos pitch, sin pitch, cos yaw·cos pitch) なので、
  * これが「パネルから原点への向き」−pos / |pos| と一致するように
  * yaw = atan2(−x, −z)、pitch = atan2(−y, √(x² + z²)) とする（0.1° 単位に丸める）。
@@ -111,7 +112,7 @@ void faceHead(Config& config);
 /**
  * 今の向きが faceHead() で決まる向きとほぼ同じか（設定パネルの ✓ 用）。
  * @param config 設定
- * @return yaw・pitch の差が 0.25° 未満で roll が 0 なら true
+ * @return yaw・pitch の差が 0.25° 未満なら true（roll は問わない）
  */
 bool isFacingHead(const Config& config);
 
