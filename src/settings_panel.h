@@ -249,8 +249,9 @@ private:
      * @param pen 描画の道具
      * @param text 言語の表
      * @param config 今の設定
+     * @return 状態のピルの左端の x（新しい版の確認の帯はこの左に置く）
      */
-    void drawHeader(const Pen& pen, const UiText& text, const Config& config) const;
+    double drawHeader(const Pen& pen, const UiText& text, const Config& config) const;
 
     /**
      * 左のカード「パネル」（表示・大きさ・透明度・既定に戻す）を描く。
@@ -287,13 +288,16 @@ private:
     void drawFooter(const Pen& pen, const UiText& text, const Config& config, const AutostartStatus& autostart);
 
     /**
-     * 見出しのすぐ下に出す、新しい版の確認・インストールの帯（いつも見えている 1 行 ＋ 右のボタン）。
+     * 見出しの行の、見出しと状態のピルの間に出す、新しい版の確認・インストールの帯（いつも見えている 1 行 ＋ 右のボタン）。
      * @param pen 描画の道具
      * @param text 言語の表
      * @param config 今の設定
      * @param update 新しい版の確認・インストールの今の状態
+     * @param left 帯の左端の x
+     * @param right 帯の右端の x
      */
-    void drawUpdateBar(const Pen& pen, const UiText& text, const Config& config, const frame_updater::UpdateStatus& update);
+    void drawUpdateBar(const Pen& pen, const UiText& text, const Config& config, const frame_updater::UpdateStatus& update,
+                       double left, double right);
 };
 
 /**

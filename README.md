@@ -24,7 +24,7 @@ These images were written out by the app itself (`--dump-png` / `--dump-settings
 | Power | Power draw of the main supply rail (W) | Sum of all measured channels, fan speed | Main rail power |
 | Temp | CPU temperature (hottest core) | GPU, battery, and near the display / exhaust / heat sink | CPU and GPU, with the warning thresholds. A red badge and a red frame around the panel appear while heat is throttling the CPU or GPU |
 | Bottom line 1 | CPU usage (overall and busiest core), fastest cluster clock, GPU clock | | |
-| Bottom line 2 | The Steam Link direct wireless link: signal strength (Wi-Fi icon and dBm), data actually flowing (↓ PC → headset, ↑ headset → PC, Mbps) and link rates. A grey crossed-out icon means no PC is connected | | |
+| Bottom line 2 | Wireless. **Link** when a PC is on the Steam Link direct wireless link; otherwise **Wi-Fi** for the access point the headset is joined to (e.g. your home Wi-Fi). Signal strength (Wi-Fi icon and dBm), data actually flowing (↓ into the headset, ↑ out of it, Mbps) and link rates. A grey crossed-out icon means neither is connected | | |
 | Bottom line 3 | Headset battery, left and right controller batteries (a bolt while charging), memory | | |
 
 Numbers over a threshold turn yellow, and red past a second threshold. The thresholds can be changed in the settings file.
@@ -91,7 +91,7 @@ Options:
   | Quit app | Click twice within 3 seconds to quit |
 
   Changes apply immediately and are saved to the settings file.
-- **Updates**: a bar right below the title always shows the running version, e.g. `v0.2.0 — up to date`, with a **Check now** button that asks GitHub right away (it works even with automatic checking off). Automatic checking runs once at start and at most once a day. When a newer release exists it changes to `Version 0.2.1 is available` with an **Update** button; clicking it asks "Update to v0.2.1?" once, and **Update** in that confirmation starts the install (**Cancel** backs out). Progress ("Downloading…", "Verifying…", …) is shown in the same bar; the panel may briefly disappear and reappear while it restarts on the new version. If it fails, the bar shows the reason and **Try again** / **Close**. Releases without a `SHA256SUMS` file can't be installed this way; the bar says so and points at the release page instead.
+- **Updates**: a bar in the title row (between the title and the panel status) always shows the running version, e.g. `v0.2.0 — up to date`, with a **Check now** button that asks GitHub right away (it works even with automatic checking off). Automatic checking runs once at start and at most once a day. When a newer release exists it changes to `Version 0.2.1 is available` with an **Update** button; clicking it asks "Update to v0.2.1?" once, and **Update** in that confirmation starts the install (**Cancel** backs out). Progress ("Downloading…", "Verifying…", …) is shown in the same bar; the panel may briefly disappear and reappear while it restarts on the new version. If it fails, the bar shows the reason and **Try again** / **Close**. Releases without a `SHA256SUMS` file can't be installed this way; the bar says so and points at the release page instead.
 - **The + button** ("launch a program") in the dashboard lists **Frame Perf Overlay**. If it isn't running, this starts it. If it is already running, launching it again toggles the panel between shown and hidden.
 - **Quitting**: hover over the **Perf** icon at the bottom of the dashboard and press its close button, or use **Quit app** in the settings. It shuts down cleanly and stays off until the next SteamVR start (or until you start it from **+** or with `systemctl --user start frame-perf-overlay`).
 
@@ -121,7 +121,7 @@ A file with every key at its default value is in [`contrib/config.example.json`]
 | `thresholds.power_warn_w` / `power_crit_w` | `13` / `16` | Main rail power (W) |
 | `thresholds.cpu_warn_pct` / `cpu_crit_pct` | `85` / `97` | Busiest CPU core (%) |
 | `thresholds.gpu_warn_pct` / `gpu_crit_pct` | `85` / `95` | Estimated GPU usage (%) |
-| `thresholds.wifi_warn_dbm` / `wifi_crit_dbm` | `-70` / `-78` | Link signal (dBm), yellow / red at or **below**. Also where the Wi-Fi icon drops from 3 to 2 and from 2 to 1 bars |
+| `thresholds.wifi_warn_dbm` / `wifi_crit_dbm` | `-70` / `-78` | Wireless signal (dBm, direct link or Wi-Fi), yellow / red at or **below**. Also where the Wi-Fi icon drops from 3 to 2 and from 2 to 1 bars |
 | `thresholds.controller_warn_pct` / `controller_crit_pct` | `20` / `10` | Controller battery (%), yellow / red at or **below** |
 
 To use a different file, start the program with `--config PATH`.
@@ -169,7 +169,8 @@ Some values were checked against another source on a Steam Frame; others are est
 - **Power**: which circuit each power channel measures isn't documented. The main rail looks like the total supply, but that is a guess, and the "all channels" sum may count some power twice.
 - **GPU usage**: adds up the GPU time the kernel reports for your user's processes. Work done by root processes isn't counted, overlapping work is capped at 100 %, and a process that starts using the GPU can take up to 30 seconds to be counted.
 - **fps while streaming with Steam Link**: not yet checked whether frames dropped on the PC or on the network always show up as a lower fps.
-- **Steam Link throughput**: counts all traffic on the direct wireless link, not only the stream.
+- **Wireless throughput**: counts all traffic on the direct wireless link, not only the stream. On **Wi-Fi** it is everything the headset sends and receives over Wi-Fi (downloads, other apps and so on), not only Steam Link.
+- **Wi-Fi signal**: on the direct link it is the average signal of the PC's acknowledgements (the headset's own signal reading is 0 there); on Wi-Fi it is the signal of the access point as the headset receives it (the same value the OS shows), so the two can differ by a few dB for the same distance.
 - **Display, exhaust and heat sink temperatures**: the names come from the sensor names; where exactly each sensor sits isn't documented.
 - **Controller batteries**: shown as SteamVR reports them.
 
@@ -185,7 +186,7 @@ Some values were checked against another source on a Steam Frame; others are est
 ## Privacy
 
 - The app itself has no telemetry. The **only** outside network access is the update check: it asks `api.github.com` for the latest release (once at start, at most once a day while `update_check` is on, or right away when you press **Check now**), and, only after you confirm an install, downloads the release's tar.gz and `SHA256SUMS` from `github.com` / `*.githubusercontent.com` over HTTPS. Nothing else is sent; GitHub sees the usual anonymous HTTP request (your headset's IP, `curl`'s user agent). (For the Wi-Fi status shown in the panel it only asks the headset's own kernel — that never leaves the headset.)
-- For the Steam Link link it reads only the signal strength, link rates and byte counters, from the headset's own Wi-Fi driver. It doesn't extract, show or log the MAC address or network name (SSID) of the PC or the headset.
+- For the Steam Link direct link, and for the Wi-Fi access point the headset is joined to, it reads only the signal strength, link rates and byte counters, from the headset's own Wi-Fi driver. It doesn't extract, show or log any MAC address (PC, access point or headset) or the network name (SSID) of your Wi-Fi.
 - Files it writes: its own settings file (a temporary `config.json.tmp` next to it, renamed into place); a small lock file in `/run/user/<uid>` (memory only; `/tmp` if that folder doesn't exist) holding the app's process ID; and, only when checking or installing updates, the update helper's own cache files under `~/.cache/frame-perf-overlay/` (the last check's answer, install progress/log — see [Updates](#updates)).
 - Logs stay on the headset in the systemd journal.
 

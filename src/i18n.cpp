@@ -58,7 +58,7 @@ const UiText kJapanese = {
     "電力", "全ch計 ", "ファン ",
     "温度", "℃ CPU", "℃", "電池 ", "画面 ", "排気 ", "放熱 ",
     "（最大コア ", "）",
-    "直通", "未接続", "リンク ",
+    "直通", "Wi-Fi", "未接続", "リンク ",
     "電池 ", "左手", "右手", "コントローラー なし", "メモリ",
     // 設定パネル
     "Frame Perf 設定", "パネル", "。", "パネル表示中", "パネル非表示",
@@ -92,7 +92,7 @@ const UiText kEnglish = {
     "Power", "All ch ", "Fan ",
     "Temp", "°C CPU", "°C", "Batt ", "Disp ", "Exh ", "Sink ",
     " (max core ", ")",
-    "Link", "Not connected", "Rate ",
+    "Link", "Wi-Fi", "Not connected", "Rate ",
     "Batt ", "L", "R", "No controllers", "Mem",
     // Settings panel
     "Frame Perf Settings", "Panel", ". ", "Panel shown", "Panel hidden",

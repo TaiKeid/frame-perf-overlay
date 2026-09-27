@@ -544,10 +544,11 @@ void drawTextRows(const Pen& pen, double top, const PanelState& state, const Con
     x += pen.text(x, y1, "GPU ", 16, kTextMuted);
     pen.text(x, y1, num(s.gpuFreqMHz, 0) + "MHz", 16, kText);
 
-    // 2 行目: Steam Link の直通回線（wlanap）
+    // 2 行目: 無線。直通回線に相手がいれば「直通」、いなければ家の Wi-Fi の接続先を「Wi-Fi」として出す
     x = kPad;
     const WifiInfo& w = s.wifi;
-    x += pen.text(x, y2, t.direct, 16, kTextMuted);
+    const bool direct = w.interfaceUp && w.connected && !w.homeWifi;
+    x += pen.text(x, y2, direct ? t.direct : t.homeWifi, 16, kTextMuted);
     x += 4;
     if (!w.interfaceUp || !w.connected) {
         x += drawWifiIcon(pen, x, y2, 0, kTextMuted, true);
@@ -557,7 +558,7 @@ void drawTextRows(const Pen& pen, double top, const PanelState& state, const Con
         const Level signalLevel = levelOf(w.signalDbm, th.wifiWarnDbm, th.wifiCritDbm, true);
         x += drawWifiIcon(pen, x, y2, wifiBars(w.signalDbm, th), colorOf(signalLevel), false);
         x += 8;
-        // 実際に流れている量（PC → Frame が映像）
+        // 実際に流れている量（相手 → Frame。Steam Link なら映像はこちら）
         const double down = w.rxMbps;
         x += pen.text(x, y2, "↓", 15, kTextMuted);
         x += pen.text(x, y2, num(down, std::isnan(down) || down >= 100 ? 0 : 1), 17, kText, true);

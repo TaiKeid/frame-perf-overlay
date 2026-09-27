@@ -24,7 +24,9 @@ constexpr const char* kOverlayKey = "sasaken.frame-perf-overlay";
 constexpr const char* kOverlayName = "Frame Perf Overlay";
 constexpr const char* kDashboardKey = "sasaken.frame-perf-overlay.settings";
 constexpr const char* kDashboardName = "Frame Perf";
-constexpr float kDashboardWidthM = 2.8f;  // 1200px を 2.8m（1px あたりは前の 1024px / 2.4m とほぼ同じ）
+// 設定パネルの 1px あたりの大きさ（m）。1200px を 2.8m で出していたときと同じ（前の 1024px / 2.4m ともほぼ同じ）。
+// 幅（m）は画像の幅（px）から決める
+constexpr float kDashboardMetersPerPx = 2.8f / 1200.0f;
 constexpr uint32_t kMaxTimings = 256;
 // 終了時、オーバーレイを消してから VR_Shutdown まで待つ時間（90Hz で約 36 フレーム）
 constexpr int kShutdownWaitMs = 400;
@@ -199,7 +201,7 @@ void VrOverlay::createDashboard(int width, int height) {
     thumbnailHandle_ = thumbnail;
     settingsHeight_ = height;
 
-    checkOverlay("SetOverlayWidthInMeters(設定)", overlay->SetOverlayWidthInMeters(main, kDashboardWidthM));
+    checkOverlay("SetOverlayWidthInMeters(設定)", overlay->SetOverlayWidthInMeters(main, kDashboardMetersPerPx * static_cast<float>(width)));
     checkOverlay("SetOverlayInputMethod(設定)", overlay->SetOverlayInputMethod(main, vr::VROverlayInputMethod_Mouse));
     // マウス座標を画像の px にそろえる
     const vr::HmdVector2_t scale = {{static_cast<float>(width), static_cast<float>(height)}};

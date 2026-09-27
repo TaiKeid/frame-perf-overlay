@@ -38,7 +38,8 @@ struct UiText {
     const char* maxCoreOpen;    ///< 「（最大コア 」
     const char* maxCoreClose;   ///< 「）」
     const char* direct;         ///< Steam Link の直通回線
-    const char* notConnected;   ///< 直通回線が未接続
+    const char* homeWifi;       ///< 家の Wi-Fi（直通回線に相手がいないとき・どちらにもつながっていないとき）
+    const char* notConnected;   ///< 直通回線にも家の Wi-Fi にもつながっていない
     const char* linkRate;       ///< リンク速度
     const char* battery;        ///< 本体の電池
     const char* leftHand;       ///< 左手のコントローラー

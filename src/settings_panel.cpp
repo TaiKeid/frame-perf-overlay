@@ -13,22 +13,24 @@
 
 namespace {
 
-// 1200×993 を幅 2.8m で出す（1px あたりの大きさは前の 1024px / 2.4m とほぼ同じ）
-constexpr int kWidth = 1200;
-constexpr int kHeight = 993;
+// 1600×690。1px あたりの大きさは前（1200px を 2.8m）と同じにする（幅は vr_overlay.cpp で px から決める）。
+// 横に長くして縦を詰める: 見出しの行に新しい版の確認の帯を入れ、パネル・位置・向きのカードを横に 3 つ並べる
+constexpr int kWidth = 1600;
+constexpr int kHeight = 690;
 constexpr double kPad = 28;          // パネルの外側の余白
 constexpr double kButtonH = 68;      // ボタンの高さ（レーザーで押しやすい大きさ。前と同じ）
-constexpr double kUpdateBarY = 84;    // 見出しの下、新しい版の確認の帯（いつも見えている行）
-constexpr double kUpdateBarH = 64;
-constexpr double kCardY = kUpdateBarY + kUpdateBarH + 24;  // 左右のカードの上端
-constexpr double kCardH = 424;
+constexpr double kHeaderY = 20;      // 見出しの行（見出し・新しい版の確認の帯・状態のピル）の上端
+constexpr double kHeaderH = kButtonH + 16;  // 帯のボタンも 68px にして、上下に 8px ずつ
+constexpr double kCardGap = 24;      // カードどうしの間
+constexpr double kCardY = kHeaderY + kHeaderH + 20;  // 3 つのカードの上端
+constexpr double kCardH = 420;
 constexpr double kCardPad = 20;      // カードの中の余白
 constexpr double kLeftCardX = kPad;  // 左のカード「パネル」
-constexpr double kLeftCardW = 560;
-constexpr double kRightCardX = 612;  // 右のカード「位置」
+constexpr double kLeftCardW = 448;
+constexpr double kRightCardX = kLeftCardX + kLeftCardW + kCardGap;  // 真ん中のカード「位置」
 constexpr double kRightCardW = 560;
 // 左のカードの行
-constexpr double kRowControlX = kLeftCardX + 172;  // ボタンの左端（左は行の見出し）
+constexpr double kRowControlX = kLeftCardX + 140;  // ボタンの左端（左は行の見出し）
 constexpr double kRowY0 = kCardY + 64;             // 1 行目のボタンの上端
 constexpr double kRowStep = 84;
 constexpr double kSegmentW = 260;                  // 2 択のセグメント切り替えの幅
@@ -41,21 +43,19 @@ constexpr double kPresetW = 166;
 constexpr double kPresetGap = 11;
 constexpr double kNudgeY = kPresetY + 2 * kButtonH + kPresetGap + 40;  // 微調整の 1 段目
 constexpr double kArrowW = 106;
-constexpr double kDepthX = 982;                    // 近く / 遠く
-constexpr double kDepthW = 170;
-// 下の横長のカード「向き」
-constexpr double kCardGap = 24;                    // カードどうしの間（左右のカードの間と同じ）
-constexpr double kFacingCardY = kCardY + kCardH + kCardGap;
-constexpr double kFacingCardH = 64 + 2 * kButtonH + kPresetGap + 20;  // 2 段
-constexpr double kFacingCardX = kPad;
-constexpr double kFacingCardW = kWidth - kPad * 2;
-constexpr double kFacingRowY = kFacingCardY + 64;  // 1 段目のボタンの上端（ほかのカードと同じ）
+constexpr double kDepthW = 170;                    // 近く / 遠く
+constexpr double kDepthX = kRightCardX + kRightCardW - kCardPad - kDepthW;
+// 右のカード「向き」: 上に十字（回す・上下・左右）、その下に刻みの 1° / 5°、いちばん下に自分に向ける / 正面向き
+constexpr double kFacingCardX = kRightCardX + kRightCardW + kCardGap;
+constexpr double kFacingCardW = kWidth - kPad - kFacingCardX;
+constexpr double kFacingInnerW = kFacingCardW - kCardPad * 2;
+constexpr double kFacingRowY = kCardY + 64;  // 1 段目のボタンの上端（ほかのカードと同じ）
 constexpr double kFacingRow2Y = kFacingRowY + kButtonH + kPresetGap;
-constexpr double kFacingArrowW = 150;              // ← 左向き / 右向き → / ↑ 上向き / ↓ 下向き（十字に並べる）
-constexpr double kFacingRightX = kFacingCardX + kCardPad + 3 * kFacingArrowW + 2 * kPresetGap + 40;  // 十字の右
-constexpr double kFacingRightW = kFacingCardX + kFacingCardW - kCardPad - kFacingRightX;
+constexpr double kFacingArrowW = (kFacingInnerW - 2 * kPresetGap) / 3;  // 十字の 1 つ
+constexpr double kFacingStepY = kNudgeY;  // 刻み（位置のカードの微調整の段とそろえる）
+constexpr double kFacingFaceY = kFacingStepY + kButtonH + kPresetGap;  // 自分に向ける / 正面向き
 // 下の段
-constexpr double kFooterY = kFacingCardY + kFacingCardH + kCardGap;
+constexpr double kFooterY = kCardY + kCardH + kCardGap;
 constexpr double kFooterSegmentW = 240;
 constexpr double kQuitW = 230;
 
@@ -334,8 +334,8 @@ void SettingsPanel::layoutButtons() {
     add(SettingsAction::MoveNear, kDepthX, kNudgeY, kDepthW, kButtonH);
     add(SettingsAction::MoveFar, kDepthX, arrowRow2, kDepthW, kButtonH);
 
-    // 下のカード「向き」: 左は位置の微調整と同じ十字（上の段に ↑、下の段に ← ↓ →）。
-    // 右の上の段は刻みの 1° / 5° の切り替え、下の段は自分に向ける / 正面向き
+    // 右のカード「向き」: 位置の微調整と同じ十字（上の段に ⟲ ↑ ⟳、下の段に ← ↓ →）。
+    // その下に刻みの 1° / 5° の切り替え、いちばん下に自分に向ける / 正面向き
     const double facingCol[3] = {kFacingCardX + kCardPad, kFacingCardX + kCardPad + kFacingArrowW + kPresetGap,
                                  kFacingCardX + kCardPad + 2 * (kFacingArrowW + kPresetGap)};
     add(SettingsAction::RollLeft, facingCol[0], kFacingRowY, kFacingArrowW, kButtonH);
@@ -344,10 +344,10 @@ void SettingsPanel::layoutButtons() {
     add(SettingsAction::YawLeft, facingCol[0], kFacingRow2Y, kFacingArrowW, kButtonH);
     add(SettingsAction::PitchDown, facingCol[1], kFacingRow2Y, kFacingArrowW, kButtonH);
     add(SettingsAction::YawRight, facingCol[2], kFacingRow2Y, kFacingArrowW, kButtonH);
-    segmented(kFacingRightX, kFacingRowY, kFacingRightW, SettingsAction::AngleStep1, SettingsAction::AngleStep5);
-    const double faceW = (kFacingRightW - kPresetGap) / 2;
-    add(SettingsAction::FaceMe, kFacingRightX, kFacingRow2Y, faceW, kButtonH);
-    add(SettingsAction::FaceForward, kFacingRightX + faceW + kPresetGap, kFacingRow2Y, faceW, kButtonH);
+    segmented(facingCol[0], kFacingStepY, kFacingInnerW, SettingsAction::AngleStep1, SettingsAction::AngleStep5);
+    const double faceW = (kFacingInnerW - kPresetGap) / 2;
+    add(SettingsAction::FaceMe, facingCol[0], kFacingFaceY, faceW, kButtonH);
+    add(SettingsAction::FaceForward, facingCol[0] + faceW + kPresetGap, kFacingFaceY, faceW, kButtonH);
     // 下の段の言語・自動起動・終了は、見出しの幅が言語で変わるので render() のたびに置き直す
 }
 
@@ -573,13 +573,13 @@ void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsActio
     pen.text(labelX, centerBaseline(b->y, b->h, labelSize), label, labelSize, fg, true);
 }
 
-void SettingsPanel::drawHeader(const Pen& pen, const UiText& text, const Config& config) const {
-    pen.text(kPad, 60, text.settingsTitle, 34, kText, true);
+double SettingsPanel::drawHeader(const Pen& pen, const UiText& text, const Config& config) const {
+    pen.text(kPad, centerBaseline(kHeaderY, kHeaderH, 34), text.settingsTitle, 34, kText, true);
     // 右上の状態のピル: 表示中は緑の塗り＋●＋文字、非表示は灰色の塗り＋○＋文字（色だけで伝えない）
     const std::string label = config.visible ? text.panelShown : text.panelHidden;
     const double size = 20;
     const double h = 42;
-    const double y = 26;
+    const double y = kHeaderY + (kHeaderH - h) / 2;
     const double w = pen.measure(label, size, true) + 58;
     const double x = kWidth - kPad - w;
     pen.color(config.visible ? kSuccessTint : kControl);
@@ -596,6 +596,7 @@ void SettingsPanel::drawHeader(const Pen& pen, const UiText& text, const Config&
         cairo_stroke(pen.cr);
     }
     pen.text(x + 40, centerBaseline(y, h, size), label, size, c, true);
+    return x;
 }
 
 void SettingsPanel::drawPanelCard(const Pen& pen, const UiText& text, const Config& config) const {
@@ -643,14 +644,14 @@ void SettingsPanel::drawPositionCard(const Pen& pen, const UiText& text, const C
 }
 
 void SettingsPanel::drawFacingCard(const Pen& pen, const UiText& text, const Config& config) const {
-    drawCard(pen, kFacingCardX, kFacingCardY, kFacingCardW, kFacingCardH, 20, kCard, kCard, 0);
-    pen.text(kFacingCardX + kCardPad, kFacingCardY + 42, text.cardFacing, 24, kText, true);
-    // いまの向き（度）を見出しの右に
+    drawCard(pen, kFacingCardX, kCardY, kFacingCardW, kCardH, 20, kCard, kCard, 0);
+    const double titleW = pen.text(kFacingCardX + kCardPad, kCardY + 42, text.cardFacing, 24, kText, true);
+    // いまの向き（度）を見出しの右に（見出しと重ならない幅で）
     const std::string now = std::string(text.facingNow) + "  " + text.yawName + " " + signedDegrees(config.yawDeg) +
                             "  " + text.pitchName + " " + signedDegrees(config.pitchDeg) + "  " + text.rollName + " " +
                             signedDegrees(config.rollDeg);
-    const double nowSize = fitSize(pen, now, 18, 13, kFacingCardW - kCardPad * 2 - 160, false);
-    pen.text(kFacingCardX + kFacingCardW - kCardPad, kFacingCardY + 40, now, nowSize, kTextMuted, false, true);
+    const double nowSize = fitSize(pen, now, 18, 12, kFacingInnerW - titleW - 16, false);
+    pen.text(kFacingCardX + kFacingCardW - kCardPad, kCardY + 40, now, nowSize, kTextMuted, false, true);
 
     for (const SettingsAction action :
          {SettingsAction::YawLeft, SettingsAction::YawRight, SettingsAction::PitchUp, SettingsAction::PitchDown}) {
@@ -724,7 +725,7 @@ void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const Config&
 }
 
 void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Config& config,
-                                   const frame_updater::UpdateStatus& update) {
+                                   const frame_updater::UpdateStatus& update, double left, double right) {
     using frame_updater::UpdateState;
 
     // 前フレームで置いたボタンを消してから、今の状態で要るものだけ置き直す（同じ場所に別のボタンが
@@ -737,7 +738,7 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
     }
 
     const bool confirming = updateConfirmArmed_ && update.state == UpdateState::Available;
-    drawCard(pen, kPad, kUpdateBarY, kWidth - kPad * 2, kUpdateBarH, 16, kCard, kCard, 0);
+    drawCard(pen, left, kHeaderY, right - left, kHeaderH, 16, kCard, kCard, 0);
 
     /** バージョン番号の前に v を付ける。 */
     const auto vtag = [](const std::string& v) { return "v" + v; };
@@ -749,32 +750,37 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
     };
 
     std::string headline;
+    std::string detail;     // 見出しの後ろに続ける補足（入りきらなければ 2 行目に回す）
+    std::string detailSep;  // 1 行で出すときの、見出しと補足の間
     Color color = kTextMuted;
     bool bold = false;
-    std::vector<SettingsAction> right;  // 右に置くボタン（左から順）
+    std::vector<SettingsAction> buttons;  // 右に置くボタン（左から順）
 
     if (confirming) {
         headline = format1(text.updateConfirmFormat, vtag(update.latest));
         color = kText;
         bold = true;
-        right = {SettingsAction::UpdateConfirmNo, SettingsAction::UpdateConfirmYes};
+        buttons = {SettingsAction::UpdateConfirmNo, SettingsAction::UpdateConfirmYes};
     } else {
         switch (update.state) {
             case UpdateState::Unknown:
                 headline = update.checking ? text.updateChecking : vtag(update.current);
-                if (!update.checking) right = {SettingsAction::UpdateCheckNow};
+                if (!update.checking) buttons = {SettingsAction::UpdateCheckNow};
                 break;
             case UpdateState::UpToDate:
                 headline = format1(text.updateUpToDateFormat, vtag(update.current));
-                if (!update.checking) right = {SettingsAction::UpdateCheckNow};
+                if (!update.checking) buttons = {SettingsAction::UpdateCheckNow};
                 break;
             case UpdateState::Available:
                 headline = format1(text.updateAvailableFormat, vtag(update.latest));
                 color = kWarn;
                 bold = true;
-                if (!update.installable) headline += std::string("  ") + text.updateManual;
-                if (update.installable) right.push_back(SettingsAction::UpdateInstall);
-                if (!update.checking) right.push_back(SettingsAction::UpdateCheckNow);
+                if (!update.installable) {
+                    detail = text.updateManual;
+                    detailSep = "  ";
+                }
+                if (update.installable) buttons.push_back(SettingsAction::UpdateInstall);
+                if (!update.checking) buttons.push_back(SettingsAction::UpdateCheckNow);
                 break;
             case UpdateState::Installing:
                 headline = format1(text.updateInstallingFormat, updateStepText(config.language, update.step));
@@ -784,40 +790,54 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
                 headline = format1(text.updateInstalledFormat, vtag(update.version));
                 color = kSuccess;
                 bold = true;
-                right = {SettingsAction::UpdateDismiss};
+                buttons = {SettingsAction::UpdateDismiss};
                 break;
             case UpdateState::CheckFailed:
                 // くわしい理由（updateLogHint）はここには出さない。ボタンと並ぶと長い文言で入りきらないため
                 // （journalctl・README の「うまく動かないとき」を参照）
-                headline = std::string(text.updateCheckFailed) + " " + updateErrorText(config.language, update.error);
+                headline = text.updateCheckFailed;
+                detail = updateErrorText(config.language, update.error);
+                detailSep = " ";
                 color = kDanger;
-                if (!update.checking) right = {SettingsAction::UpdateCheckNow};
+                if (!update.checking) buttons = {SettingsAction::UpdateCheckNow};
                 break;
             case UpdateState::InstallFailed:
-                headline = std::string(text.updateInstallFailed) + " " + updateErrorText(config.language, update.error);
+                headline = text.updateInstallFailed;
+                detail = updateErrorText(config.language, update.error);
+                detailSep = " ";
                 color = kDanger;
                 bold = true;
-                right = {SettingsAction::UpdateRetry, SettingsAction::UpdateDismiss};
+                buttons = {SettingsAction::UpdateRetry, SettingsAction::UpdateDismiss};
                 break;
         }
     }
 
-    // 右のボタンを右詰めで置く（幅は文言に合わせる）
-    const double btnH = kUpdateBarH - 16;
-    const double btnY = kUpdateBarY + 8;
+    // 右のボタンを右詰めで置く（幅は文言に合わせる。高さはほかのボタンと同じ 68px）
+    const double btnY = kHeaderY + (kHeaderH - kButtonH) / 2;
     const double gap = 12;
-    double rightX = kWidth - kPad - kCardPad;
-    for (auto it = right.rbegin(); it != right.rend(); ++it) {
-        const double w = pen.measure(labelOf(*it, text), 22, true) + 32;
-        rightX -= w;
-        placeFooterButton(*it, rightX, btnY, w, btnH);
-        rightX -= gap;
+    const double inset = 8;  // 帯の端とボタンの間（上下と同じ）
+    double buttonX = right - inset;
+    for (auto it = buttons.rbegin(); it != buttons.rend(); ++it) {
+        const double w = pen.measure(labelOf(*it, text), 22, true) + 40;
+        buttonX -= w;
+        placeFooterButton(*it, buttonX, btnY, w, kButtonH);
+        buttonX -= gap;
     }
-    const double textRight = right.empty() ? kWidth - kPad - kCardPad : rightX + gap;
-    const double maxTextW = textRight - (kPad + kCardPad);
-    const double size = fitSize(pen, headline, 22, 14, maxTextW, bold);
-    pen.text(kPad + kCardPad, centerBaseline(kUpdateBarY, kUpdateBarH, size), headline, size, color, bold);
-    for (const SettingsAction a : right) drawButton(pen, text, a, false, 20);
+    const double textLeft = left + kCardPad;
+    const double textRight = buttons.empty() ? right - kCardPad : buttonX + gap - 16;
+    // 1 行で 20px 以上で入ればそのまま。入らなければ、見出しと補足を 2 行に分ける（文言は変えない）
+    const double maxTextW = textRight - textLeft;
+    const std::string oneLine = detail.empty() ? headline : headline + detailSep + detail;
+    const double oneSize = fitSize(pen, oneLine, 22, 14, maxTextW, bold);
+    if (detail.empty() || oneSize >= 20) {
+        pen.text(textLeft, centerBaseline(kHeaderY, kHeaderH, oneSize), oneLine, oneSize, color, bold);
+    } else {
+        const double size1 = fitSize(pen, headline, 20, 14, maxTextW, bold);
+        const double size2 = fitSize(pen, detail, 18, 13, maxTextW, bold);
+        pen.text(textLeft, kHeaderY + 36, headline, size1, color, bold);
+        pen.text(textLeft, kHeaderY + 66, detail, size2, color, bold);
+    }
+    for (const SettingsAction a : buttons) drawButton(pen, text, a, false, 22);
 }
 
 void SettingsPanel::render(const Config& config, const AutostartStatus& autostart,
@@ -834,10 +854,11 @@ void SettingsPanel::render(const Config& config, const AutostartStatus& autostar
     pen.roundedRect(0, 0, kWidth, kHeight, 24);
     cairo_fill(cr_);
 
-    // 上 = 見出しと状態のピル、その下 = 新しい版の確認の帯、左のカード = パネル、右のカード = 位置、
-    // その下の横長のカード = 向き、下 = 言語・自動起動・終了と説明
-    drawHeader(pen, t, config);
-    drawUpdateBar(pen, t, config, update);
+    // 上の行 = 見出し・新しい版の確認の帯・状態のピル、その下に左から パネル・位置・向き のカード、
+    // 下 = 言語・自動起動・終了と説明
+    const double pillX = drawHeader(pen, t, config);
+    const double titleRight = kPad + pen.measure(t.settingsTitle, 34, true);
+    drawUpdateBar(pen, t, config, update, titleRight + 28, pillX - 20);
     drawPanelCard(pen, t, config);
     drawPositionCard(pen, t, config);
     drawFacingCard(pen, t, config);

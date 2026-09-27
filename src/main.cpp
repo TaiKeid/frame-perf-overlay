@@ -178,7 +178,7 @@ void printUsage() {
         "      --fake-frames    フレーム時間とコントローラーにダミーの値を入れる（見た目の確認用）\n"
         "      --fake-warnings  警告色の確認用に、熱で制限中・電波弱・電池少などのダミーの値を入れる\n"
         "      --fake-fps N     fps が落ちたときの見た目用に、アプリの fps をダミーで N 付近にする\n"
-        "      --fake-wifi D    直通回線をダミーにする（D は電波の dBm、none で未接続）\n"
+        "      --fake-wifi D    直通回線をダミーにする（D は電波の dBm、none で未接続。home:D で家の Wi-Fi）\n"
         "      --fake-throttle  SteamVR がアプリを半分に抑えている状態（72Hz で 36 fps、再投影 50%%）をダミーで出す\n"
         "  --dump-settings-png PATH  OpenVR なしで設定パネル（ダッシュボード）の画像を PNG に書き出して終わる\n"
         "      --thumbnail-png PATH  あわせてダッシュボードのサムネイル（ランチャーのアイコンと同じ絵）も書き出す\n"
@@ -294,13 +294,15 @@ void printSample(const SensorSample& s) {
                 fmt(s.exhaustTempC, 1).c_str(), fmt(s.heatsinkTempC, 1).c_str(), s.throttleCpu ? "中" : "なし",
                 s.throttleGpu ? "中" : "なし");
     if (!s.wifi.interfaceUp) {
-        std::printf("  直通   wlanap なし\n");
+        std::printf("  無線   インターフェースなし（直通回線の AP も、家の Wi-Fi の子機も見つからない）\n");
     } else if (!s.wifi.connected) {
-        std::printf("  直通   未接続\n");
+        std::printf("  無線   未接続（直通回線に相手がいない・家の Wi-Fi にもつながっていない）\n");
     } else {
-        std::printf("  直通   受信 %s Mbps  送信 %s Mbps  リンク 送 %s / 受 %s Mbps  電波 %s dBm\n",
-                    fmt(s.wifi.rxMbps, 2).c_str(), fmt(s.wifi.txMbps, 2).c_str(), fmt(s.wifi.txLinkMbps, 1).c_str(),
-                    fmt(s.wifi.rxLinkMbps, 1).c_str(), fmt(s.wifi.signalDbm, 0).c_str());
+        // 直通回線の相手は PC、家の Wi-Fi の相手はつないでいる AP
+        std::printf("  %s 受信 %s Mbps  送信 %s Mbps  リンク 送 %s / 受 %s Mbps  電波 %s dBm\n",
+                    s.wifi.homeWifi ? "Wi-Fi " : "直通  ", fmt(s.wifi.rxMbps, 2).c_str(), fmt(s.wifi.txMbps, 2).c_str(),
+                    fmt(s.wifi.txLinkMbps, 1).c_str(), fmt(s.wifi.rxLinkMbps, 1).c_str(),
+                    fmt(s.wifi.signalDbm, 0).c_str());
     }
     std::printf("  電力   vph %sW  全ch計 %sW\n        ", fmt(s.powerMainW, 3).c_str(), fmt(s.powerSumW, 3).c_str());
     std::string chip;
@@ -423,14 +425,16 @@ void applyFakeThrottle(FrameStats& frame, double t) {
 /**
  * 見た目の確認用に、直通回線をダミーの状態にする。
  * @param sample 書き換える読み取り結果
- * @param value 電波の dBm（例: "-65"）、または "none"（未接続）
+ * @param value 電波の dBm（例: "-65"。直通回線）、"home:-47"（家の Wi-Fi）、または "none"（未接続）
  */
 void applyFakeWifi(SensorSample& sample, const std::string& value) {
     sample.wifi = WifiInfo();
     sample.wifi.interfaceUp = true;
     if (value == "none") return;  // ステーションなし = 未接続
     sample.wifi.connected = true;
-    sample.wifi.signalDbm = std::atof(value.c_str());
+    const bool home = value.rfind("home:", 0) == 0;
+    sample.wifi.homeWifi = home;
+    sample.wifi.signalDbm = std::atof(value.c_str() + (home ? 5 : 0));
     sample.wifi.rxMbps = 187.4;
     sample.wifi.txMbps = 2.1;
     sample.wifi.txLinkMbps = 1152.8;
@@ -912,7 +916,7 @@ int runOverlay(const Options& options) {
                     lastVerbose = now;
                     std::fprintf(stderr,
                                  "[値] ループ %u 回 | fps %s frames=%u GPU %s/%sms CPU %s/%sms 目標 %sms(%sHz) 再投影 %s%% 落ち %u | "
-                                 "GPU使用率 %s%% CPU %s℃ GPU %s℃ vph %sW 熱制限 %d/%d | 直通 %s ↓%sMbps %sdBm | "
+                                 "GPU使用率 %s%% CPU %s℃ GPU %s℃ vph %sW 熱制限 %d/%d | 無線 %s ↓%sMbps %sdBm | "
                                  "コン L%s R%s | ダッシュボード %s 設定パネル %s | 送信 %s | CPU時間 ms: 読取 %.2f VR %.2f 描画 %.2f 変換 %.2f 送信 %.2f\n",
                                  loopCount, fmt(frame.appFps, 1).c_str(), frame.frames, fmt(frame.gpuMs, 2).c_str(),
                                  fmt(frame.gpuMaxMs, 2).c_str(),
@@ -922,7 +926,8 @@ int runOverlay(const Options& options) {
                                  fmt(sample.gpuBusyPct, 1).c_str(), fmt(sample.cpuTempC, 1).c_str(),
                                  fmt(sample.gpuTempC, 1).c_str(), fmt(sample.powerMainW, 2).c_str(),
                                  sample.throttleCpu ? 1 : 0, sample.throttleGpu ? 1 : 0,
-                                 sample.wifi.connected ? "接続" : "未接続", fmt(sample.wifi.rxMbps, 1).c_str(),
+                                 !sample.wifi.connected ? "未接続" : (sample.wifi.homeWifi ? "Wi-Fi" : "直通"),
+                                 fmt(sample.wifi.rxMbps, 1).c_str(),
                                  fmt(sample.wifi.signalDbm, 0).c_str(),
                                  state.controllers.left.present ? fmt(state.controllers.left.pct, 0).c_str() : "-",
                                  state.controllers.right.present ? fmt(state.controllers.right.pct, 0).c_str() : "-",
