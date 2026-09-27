@@ -39,6 +39,8 @@ enum class SettingsAction {
     PitchDown,    ///< 面を下へ向ける（pitch を減らす）
     FaceMe,       ///< 今の位置のまま、面を頭に向ける
     FaceForward,  ///< 回転なし（0, 0, 0）に戻す
+    AngleStep1,   ///< 向きのボタンの刻みを 1° に（設定パネルの中だけで扱う）
+    AngleStep5,   ///< 向きのボタンの刻みを 5° に（設定パネルの中だけで扱う）
     SizeDown,
     SizeUp,
     AlphaDown,
@@ -59,9 +61,10 @@ enum class SettingsAction {
  * 操作を設定に反映する（Quit と None は何もしない）。
  * @param action 操作
  * @param config 書き換える設定
+ * @param angleStepDeg 向きのボタン（左右・上下）の刻み（度。1 か 5）。その刻みの目盛りに寄せて動かす
  * @return 設定が変わったら true
  */
-bool applySettingsAction(SettingsAction action, Config& config);
+bool applySettingsAction(SettingsAction action, Config& config, double angleStepDeg = 1.0);
 
 /**
  * 設定パネルの画像を描き、レーザーポインターの位置からボタンを判定する係。
@@ -151,6 +154,12 @@ public:
     /** @return 画像の高さ（px） */
     int height() const;
 
+    /**
+     * 向きのボタン（左右・上下）の今の刻み。設定ファイルには保存せず、起動するたびに 1° から始まる。
+     * @return 刻み（度。1 か 5）
+     */
+    double angleStepDeg() const { return angleStepDeg_; }
+
 private:
     /** ボタン 1 個。文言は描くときに言語の表から引く。 */
     struct Button {
@@ -169,6 +178,7 @@ private:
     bool quitArmed_ = false;
     double quitArmedUntil_ = 0.0;
     bool updateConfirmArmed_ = false;  ///< 「更新する」を 1 回押して、確認の表示を出している間
+    double angleStepDeg_ = 1.0;        ///< 向きのボタンの刻み（度）。「1° ずつ / 5° ずつ」で切り替える（起動中だけ覚える）
 
     /** 左右と向きのカードのボタンの配置を作る（起動時に 1 回。下の段は render() のたびに置き直す）。 */
     void layoutButtons();
@@ -254,7 +264,7 @@ private:
     void drawPositionCard(const Pen& pen, const UiText& text, const Config& config) const;
 
     /**
-     * 下の横長のカード「向き」（左右・上下の向き、自分に向ける、正面向き、いまの向き）を描く。
+     * 下の横長のカード「向き」（左右・上下の向きの十字、刻みの 1° / 5°、自分に向ける、正面向き、いまの向き）を描く。
      * @param pen 描画の道具
      * @param text 言語の表
      * @param config 今の設定

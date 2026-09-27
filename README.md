@@ -81,7 +81,8 @@ Options:
   | Top L / Top R / Bottom L / Bottom C / Bottom R | Move the panel to that corner of your view and turn it to face you |
   | ← Left / Right → / ↑ Up / ↓ Down | Nudge the panel by 2 cm. The facing stays as it is |
   | Closer / Farther | Move it 5 cm nearer or further (20 cm to 3 m), keeping the direction |
-  | Facing: ← Left / Right → / ↑ Up / ↓ Down | Turn the panel's face in 1° steps (left/right up to ±180°, up/down up to ±90°) |
+  | Facing: ← Left / Right → / ↑ Up / ↓ Down | Turn the panel's face by the chosen step (left/right up to ±180°, up/down up to ±90°). It snaps to the step: at 16.7°, By 5° goes to 20° or 15° |
+  | By 1° / By 5° | How far one press of the facing arrows turns the panel. Starts at 1° each time the app starts (not saved) |
   | Face me | Keep the position and turn the panel so it faces your head |
   | Face ahead | Remove the rotation, so the panel is parallel to your face again (the look before this feature) |
   | Language | English or Japanese, applied immediately |

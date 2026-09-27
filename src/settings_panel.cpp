@@ -13,9 +13,9 @@
 
 namespace {
 
-// 1200×914 を幅 2.8m で出す（1px あたりの大きさは前の 1024px / 2.4m とほぼ同じ）
+// 1200×993 を幅 2.8m で出す（1px あたりの大きさは前の 1024px / 2.4m とほぼ同じ）
 constexpr int kWidth = 1200;
-constexpr int kHeight = 914;
+constexpr int kHeight = 993;
 constexpr double kPad = 28;          // パネルの外側の余白
 constexpr double kButtonH = 68;      // ボタンの高さ（レーザーで押しやすい大きさ。前と同じ）
 constexpr double kUpdateBarY = 84;    // 見出しの下、新しい版の確認の帯（いつも見えている行）
@@ -46,13 +46,14 @@ constexpr double kDepthW = 170;
 // 下の横長のカード「向き」
 constexpr double kCardGap = 24;                    // カードどうしの間（左右のカードの間と同じ）
 constexpr double kFacingCardY = kCardY + kCardH + kCardGap;
-constexpr double kFacingCardH = 152;
+constexpr double kFacingCardH = 64 + 2 * kButtonH + kPresetGap + 20;  // 2 段
 constexpr double kFacingCardX = kPad;
 constexpr double kFacingCardW = kWidth - kPad * 2;
-constexpr double kFacingRowY = kFacingCardY + 64;  // ボタンの上端（ほかのカードと同じ）
-constexpr double kFacingArrowW = 150;              // ← 左向き / 右向き → / ↑ 上向き / ↓ 下向き
-constexpr double kFacingGroupGap = 28;             // 左右・上下・自分に向けるの組の間
-constexpr double kFaceMeW = 215;
+constexpr double kFacingRowY = kFacingCardY + 64;  // 1 段目のボタンの上端（ほかのカードと同じ）
+constexpr double kFacingRow2Y = kFacingRowY + kButtonH + kPresetGap;
+constexpr double kFacingArrowW = 150;              // ← 左向き / 右向き → / ↑ 上向き / ↓ 下向き（十字に並べる）
+constexpr double kFacingRightX = kFacingCardX + kCardPad + 3 * kFacingArrowW + 2 * kPresetGap + 40;  // 十字の右
+constexpr double kFacingRightW = kFacingCardX + kFacingCardW - kCardPad - kFacingRightX;
 // 下の段
 constexpr double kFooterY = kFacingCardY + kFacingCardH + kCardGap;
 constexpr double kFooterSegmentW = 240;
@@ -61,7 +62,6 @@ constexpr double kQuitW = 230;
 constexpr double kNudgeM = 0.02;       // 上下左右の微調整（m）
 constexpr double kDepthStepM = 0.05;   // 前後の微調整（m）
 constexpr double kPresetDistance = 0.5;  // プリセットの座標はこの距離での値
-constexpr double kAngleStepDeg = 1.0;    // 向きの 1 回の変化（度）
 
 /** 位置のプリセット（距離 0.5m での x, y）。 */
 struct Preset {
@@ -116,16 +116,18 @@ std::string signedCm(double meters) {
 }
 
 /**
- * 角度を 1° 刻みの次の目盛りへ進める（例: 16.7° から増やすと 17°、減らすと 16°）。範囲の外には出さない。
+ * 角度を刻みの次の目盛りへ進める（例: 16.7° から、1° 刻みなら増やすと 17°・減らすと 16°、
+ * 5° 刻みなら増やすと 20°・減らすと 15°）。範囲の外には出さない。
  * @param degrees 今の角度（度）
  * @param direction +1 で増やす、-1 で減らす
  * @param limit 範囲（±limit）
+ * @param step 刻み（度）
  * @return 新しい角度（度）
  */
-double stepAngle(double degrees, int direction, double limit) {
-    const double steps = degrees / kAngleStepDeg;
+double stepAngle(double degrees, int direction, double limit, double step) {
+    const double steps = degrees / step;
     const double next = direction > 0 ? std::floor(steps + 1e-6) + 1 : std::ceil(steps - 1e-6) - 1;
-    return std::clamp(next * kAngleStepDeg, -limit, limit);
+    return std::clamp(next * step, -limit, limit);
 }
 
 /**
@@ -151,7 +153,7 @@ bool isFacingForward(const Config& config) {
 
 }  // namespace
 
-bool applySettingsAction(SettingsAction action, Config& config) {
+bool applySettingsAction(SettingsAction action, Config& config, double angleStepDeg) {
     const Config before = config;
     switch (action) {
         case SettingsAction::ShowOn: config.visible = true; break;
@@ -189,10 +191,10 @@ bool applySettingsAction(SettingsAction action, Config& config) {
             break;
         }
         // 向き（位置は変えない）
-        case SettingsAction::YawLeft: config.yawDeg = stepAngle(config.yawDeg, -1, 180.0); break;
-        case SettingsAction::YawRight: config.yawDeg = stepAngle(config.yawDeg, +1, 180.0); break;
-        case SettingsAction::PitchUp: config.pitchDeg = stepAngle(config.pitchDeg, +1, 90.0); break;
-        case SettingsAction::PitchDown: config.pitchDeg = stepAngle(config.pitchDeg, -1, 90.0); break;
+        case SettingsAction::YawLeft: config.yawDeg = stepAngle(config.yawDeg, -1, 180.0, angleStepDeg); break;
+        case SettingsAction::YawRight: config.yawDeg = stepAngle(config.yawDeg, +1, 180.0, angleStepDeg); break;
+        case SettingsAction::PitchUp: config.pitchDeg = stepAngle(config.pitchDeg, +1, 90.0, angleStepDeg); break;
+        case SettingsAction::PitchDown: config.pitchDeg = stepAngle(config.pitchDeg, -1, 90.0, angleStepDeg); break;
         case SettingsAction::FaceMe: faceHead(config); break;
         case SettingsAction::FaceForward:
             config.yawDeg = 0.0;
@@ -219,6 +221,8 @@ bool applySettingsAction(SettingsAction action, Config& config) {
         case SettingsAction::UpdateConfirmNo:
         case SettingsAction::UpdateRetry:
         case SettingsAction::UpdateDismiss:
+        case SettingsAction::AngleStep1:  // 刻みは設定パネルの中だけで覚える（設定ファイルは変えない）
+        case SettingsAction::AngleStep5:
         case SettingsAction::None: break;
     }
     return config.visible != before.visible || config.posX != before.posX || config.posY != before.posY ||
@@ -287,19 +291,18 @@ void SettingsPanel::layoutButtons() {
     add(SettingsAction::MoveNear, kDepthX, kNudgeY, kDepthW, kButtonH);
     add(SettingsAction::MoveFar, kDepthX, arrowRow2, kDepthW, kButtonH);
 
-    // 下のカード「向き」: 左右の組・上下の組・自分に向ける / 正面向きを 1 列に
-    double x = kFacingCardX + kCardPad;
-    add(SettingsAction::YawLeft, x, kFacingRowY, kFacingArrowW, kButtonH);
-    x += kFacingArrowW + kPresetGap;
-    add(SettingsAction::YawRight, x, kFacingRowY, kFacingArrowW, kButtonH);
-    x += kFacingArrowW + kFacingGroupGap;
-    add(SettingsAction::PitchUp, x, kFacingRowY, kFacingArrowW, kButtonH);
-    x += kFacingArrowW + kPresetGap;
-    add(SettingsAction::PitchDown, x, kFacingRowY, kFacingArrowW, kButtonH);
-    x += kFacingArrowW + kFacingGroupGap;
-    add(SettingsAction::FaceMe, x, kFacingRowY, kFaceMeW, kButtonH);
-    x += kFaceMeW + kPresetGap;
-    add(SettingsAction::FaceForward, x, kFacingRowY, kFacingCardX + kFacingCardW - kCardPad - x, kButtonH);
+    // 下のカード「向き」: 左は位置の微調整と同じ十字（上の段に ↑、下の段に ← ↓ →）。
+    // 右の上の段は刻みの 1° / 5° の切り替え、下の段は自分に向ける / 正面向き
+    const double facingCol[3] = {kFacingCardX + kCardPad, kFacingCardX + kCardPad + kFacingArrowW + kPresetGap,
+                                 kFacingCardX + kCardPad + 2 * (kFacingArrowW + kPresetGap)};
+    add(SettingsAction::PitchUp, facingCol[1], kFacingRowY, kFacingArrowW, kButtonH);
+    add(SettingsAction::YawLeft, facingCol[0], kFacingRow2Y, kFacingArrowW, kButtonH);
+    add(SettingsAction::PitchDown, facingCol[1], kFacingRow2Y, kFacingArrowW, kButtonH);
+    add(SettingsAction::YawRight, facingCol[2], kFacingRow2Y, kFacingArrowW, kButtonH);
+    segmented(kFacingRightX, kFacingRowY, kFacingRightW, SettingsAction::AngleStep1, SettingsAction::AngleStep5);
+    const double faceW = (kFacingRightW - kPresetGap) / 2;
+    add(SettingsAction::FaceMe, kFacingRightX, kFacingRow2Y, faceW, kButtonH);
+    add(SettingsAction::FaceForward, kFacingRightX + faceW + kPresetGap, kFacingRow2Y, faceW, kButtonH);
     // 下の段の言語・自動起動・終了は、見出しの幅が言語で変わるので render() のたびに置き直す
 }
 
@@ -327,6 +330,8 @@ std::string SettingsPanel::labelOf(SettingsAction action, const UiText& text) co
         case SettingsAction::PitchDown: return text.pitchDown;
         case SettingsAction::FaceMe: return text.faceMe;
         case SettingsAction::FaceForward: return text.faceForward;
+        case SettingsAction::AngleStep1: return text.angleStep1;
+        case SettingsAction::AngleStep5: return text.angleStep5;
         case SettingsAction::SizeDown:
         case SettingsAction::AlphaDown: return "−";
         case SettingsAction::SizeUp:
@@ -384,6 +389,11 @@ SettingsAction SettingsPanel::pointerDown(double x, double y, double now) {
     }
     // ここまで来たら確認の表示は終わり（Yes で実行するときも、ほかのボタンを押して取り消すときも）
     updateConfirmArmed_ = false;
+    if (pressed_ == SettingsAction::AngleStep1 || pressed_ == SettingsAction::AngleStep5) {
+        // 刻みはこのパネルの中だけで覚える（設定ファイルには保存しない）
+        angleStepDeg_ = pressed_ == SettingsAction::AngleStep5 ? 5.0 : 1.0;
+        return SettingsAction::None;
+    }
     return pressed_;
 }
 
@@ -592,6 +602,8 @@ void SettingsPanel::drawFacingCard(const Pen& pen, const UiText& text, const Con
          {SettingsAction::YawLeft, SettingsAction::YawRight, SettingsAction::PitchUp, SettingsAction::PitchDown}) {
         drawButton(pen, text, action, false, 24);
     }
+    drawSegmented(pen, text, SettingsAction::AngleStep1, SettingsAction::AngleStep5, angleStepDeg_ == 5.0 ? 1 : 0,
+                  true);
     // 今その向きになっていれば ✓（位置のプリセットと同じ見せ方）
     drawButton(pen, text, SettingsAction::FaceMe, isFacingHead(config), 24);
     drawButton(pen, text, SettingsAction::FaceForward, isFacingForward(config), 24);

@@ -604,9 +604,11 @@ int runDumpFrameTimings(const Options& options) {
  * @param config 今の設定（書き換える）
  * @param watcher 設定ファイルの監視役（自分の書き込みを読み直さないよう知らせる）
  * @param vr オーバーレイ
+ * @param angleStepDeg 向きのボタンの刻み（度。設定パネルの「1° ずつ / 5° ずつ」）
  */
-void handleSettingsAction(SettingsAction action, Config& config, ConfigWatcher& watcher, VrOverlay& vr) {
-    if (!applySettingsAction(action, config)) return;
+void handleSettingsAction(SettingsAction action, Config& config, ConfigWatcher& watcher, VrOverlay& vr,
+                          double angleStepDeg = 1.0) {
+    if (!applySettingsAction(action, config, angleStepDeg)) return;
     vr.applyConfig(config);
     std::string error;
     if (saveConfig(watcher.path(), config, error)) {
@@ -836,7 +838,7 @@ int runOverlay(const Options& options) {
                     } else if (action == SettingsAction::UpdateDismiss) {
                         updater.dismiss();
                     } else {
-                        handleSettingsAction(action, config, watcher, vr);
+                        handleSettingsAction(action, config, watcher, vr, settings.angleStepDeg());
                     }
                     settingsDirty = true;
                     break;
