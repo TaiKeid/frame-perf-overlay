@@ -5,6 +5,11 @@ This file lists the third-party code it contains and the system software it uses
 
 ## Bundled in this repository
 
+### Update helper (`vendor/frame-updater/`)
+
+- A copy of the author's own shared update code (frame-updater, a private repository), kept in sync with `vendor/frame-updater/UPSTREAM` and checked by `vendor/frame-updater/verify.sh`.
+- It is not third-party code: it is by the same author and is released under the same MIT License as this project (see [LICENSE](LICENSE)).
+
 ### OpenVR SDK header (`third_party/openvr/openvr.h`)
 
 - Project: OpenVR SDK by Valve Corporation, https://github.com/ValveSoftware/openvr
