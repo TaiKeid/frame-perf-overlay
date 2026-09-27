@@ -719,14 +719,14 @@ void SettingsPanel::drawUpdateBar(const Pen& pen, const UiText& text, const Conf
                 right = {SettingsAction::UpdateDismiss};
                 break;
             case UpdateState::CheckFailed:
-                headline = std::string(text.updateCheckFailed) + " " + updateErrorText(config.language, update.error) +
-                          "  " + text.updateLogHint;
+                // くわしい理由（updateLogHint）はここには出さない。ボタンと並ぶと長い文言で入りきらないため
+                // （journalctl・README の「うまく動かないとき」を参照）
+                headline = std::string(text.updateCheckFailed) + " " + updateErrorText(config.language, update.error);
                 color = kDanger;
                 if (!update.checking) right = {SettingsAction::UpdateCheckNow};
                 break;
             case UpdateState::InstallFailed:
-                headline = std::string(text.updateInstallFailed) + " " + updateErrorText(config.language, update.error) +
-                          "  " + text.updateLogHint;
+                headline = std::string(text.updateInstallFailed) + " " + updateErrorText(config.language, update.error);
                 color = kDanger;
                 bold = true;
                 right = {SettingsAction::UpdateRetry, SettingsAction::UpdateDismiss};
