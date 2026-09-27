@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -27,6 +28,8 @@ constexpr float kDashboardWidthM = 2.8f;  // 1200px を 2.8m（1px あたりは�
 constexpr uint32_t kMaxTimings = 256;
 // 終了時、オーバーレイを消してから VR_Shutdown まで待つ時間（90Hz で約 36 フレーム）
 constexpr int kShutdownWaitMs = 400;
+// --verbose の向きの確かめを、変換を渡してから何秒後にするか
+constexpr double kFacingCheckDelaySec = 0.5;
 
 /**
  * 単調増加の時計で今の時刻を秒で返す。
@@ -268,14 +271,17 @@ void VrOverlay::applyConfig(const Config& config) {
     checkOverlay("SetOverlayWidthInMeters", overlay->SetOverlayWidthInMeters(panelHandle_, static_cast<float>(config.widthM)));
     checkOverlay("SetOverlayAlpha", overlay->SetOverlayAlpha(panelHandle_, static_cast<float>(config.alpha)));
 
-    // HMD 基準の位置。回転はなし（パネルは顔の正面を向く）
+    // HMD 基準の変換 = 位置 × 回転（3×4 の左 3 列が回転、右端の列が位置）。
+    // 回転はパネル自身の軸で yaw → pitch → roll の順（panelRotation のコメントを参照）。
+    // オーバーレイは +z 側が表。回転なしなら表は頭の方（HMD の +z）を向き、パネルは顔の正面と平行になる
+    double rotation[3][3];
+    panelRotation(config, rotation);
+    const double position[3] = {config.posX, config.posY, config.posZ};
     vr::HmdMatrix34_t transform = {};
-    transform.m[0][0] = 1.0f;
-    transform.m[1][1] = 1.0f;
-    transform.m[2][2] = 1.0f;
-    transform.m[0][3] = static_cast<float>(config.posX);
-    transform.m[1][3] = static_cast<float>(config.posY);
-    transform.m[2][3] = static_cast<float>(config.posZ);
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) transform.m[row][col] = static_cast<float>(rotation[row][col]);
+        transform.m[row][3] = static_cast<float>(position[row]);
+    }
     checkOverlay("SetOverlayTransformTrackedDeviceRelative",
                  overlay->SetOverlayTransformTrackedDeviceRelative(panelHandle_, vr::k_unTrackedDeviceIndex_Hmd, &transform));
 
@@ -283,6 +289,65 @@ void VrOverlay::applyConfig(const Config& config) {
         checkOverlay("ShowOverlay", overlay->ShowOverlay(panelHandle_));
     } else {
         checkOverlay("HideOverlay", overlay->HideOverlay(panelHandle_));
+    }
+    // 変換を渡した直後に交差を聞くと、SteamVR はまだ前の変換で答える（実機で確かめた）ので、少し待ってから聞く
+    if (verbose_) {
+        facingCheckConfig_ = config;
+        facingCheckAt_ = nowSeconds() + kFacingCheckDelaySec;
+    }
+}
+
+void VrOverlay::logFacingCheck(const Config& config) const {
+    vr::TrackedDevicePose_t pose {};
+    vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0.0f, &pose, 1);
+    if (!pose.bPoseIsValid) {
+        std::fprintf(stderr, "[向き] HMD の姿勢が取れないので確かめられません\n");
+        return;
+    }
+    const vr::HmdMatrix34_t& hmd = pose.mDeviceToAbsoluteTracking;
+    double r[3][3];
+    panelRotation(config, r);
+    const double pos[3] = {config.posX, config.posY, config.posZ};
+    const double distance = std::sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
+    std::fprintf(stderr,
+                 "[向き] 位置 (%.3f, %.3f, %.3f) yaw %.1f pitch %.1f roll %.1f | 計算した表の向き (%.3f, %.3f, %.3f)・"
+                 "頭への向きとの内積 %.4f\n",
+                 pos[0], pos[1], pos[2], config.yawDeg, config.pitchDeg, config.rollDeg, r[0][2], r[1][2], r[2][2],
+                 distance > 0 ? -(r[0][2] * pos[0] + r[1][2] * pos[1] + r[2][2] * pos[2]) / distance : 0.0);
+
+    // 狙う点（HMD 基準）: 中心、パネル自身の +x に 2cm、+y に 2cm
+    const char* names[3] = {"中心", "パネルの+x 2cm", "パネルの+y 2cm"};
+    const double offsets[3][2] = {{0.0, 0.0}, {0.02, 0.0}, {0.0, 0.02}};
+    for (int i = 0; i < 3; ++i) {
+        double target[3];
+        for (int k = 0; k < 3; ++k) target[k] = pos[k] + r[k][0] * offsets[i][0] + r[k][1] * offsets[i][1];
+        const double length = std::sqrt(target[0] * target[0] + target[1] * target[1] + target[2] * target[2]);
+        if (length <= 0) continue;
+        // HMD 基準 → 世界（Standing）: 向きは回転だけ、始点は HMD の位置
+        vr::VROverlayIntersectionParams_t params {};
+        for (int k = 0; k < 3; ++k) {
+            params.vSource.v[k] = hmd.m[k][3];
+            params.vDirection.v[k] = static_cast<float>(
+                (hmd.m[k][0] * target[0] + hmd.m[k][1] * target[1] + hmd.m[k][2] * target[2]) / length);
+        }
+        params.eOrigin = vr::TrackingUniverseStanding;
+        vr::VROverlayIntersectionResults_t hit {};
+        if (!vr::VROverlay()->ComputeOverlayIntersection(panelHandle_, &params, &hit)) {
+            std::fprintf(stderr, "[向き] %s: 当たりなし\n", names[i]);
+            continue;
+        }
+        // UV は u が右へ、v が上へ増える。どちらも幅で割った値（縦も幅で割る。実機で確かめた）。
+        // 法線を HMD 基準に戻す（回転の転置を掛ける）
+        double normal[3];
+        for (int k = 0; k < 3; ++k) {
+            normal[k] = hmd.m[0][k] * hit.vNormal.v[0] + hmd.m[1][k] * hit.vNormal.v[1] + hmd.m[2][k] * hit.vNormal.v[2];
+        }
+        const double dotComputed = normal[0] * r[0][2] + normal[1] * r[1][2] + normal[2] * r[2][2];
+        std::fprintf(stderr,
+                     "[向き] %s: UV (%.3f, %.3f)（予想 %.3f, %.3f）距離 %.3fm（予想 %.3f）"
+                     "SteamVR の法線 (HMD 基準) (%.3f, %.3f, %.3f)・計算した表の向きとの内積 %.4f\n",
+                     names[i], hit.vUVs.v[0], hit.vUVs.v[1], 0.5 + offsets[i][0] / config.widthM,
+                     0.5 + offsets[i][1] / config.widthM, hit.fDistance, length, normal[0], normal[1], normal[2], dotComputed);
     }
 }
 
@@ -326,6 +391,10 @@ VrEvents VrOverlay::pollEvents(bool includeSystem) {
                 default: break;
             }
         }
+    }
+    if (includeSystem && facingCheckAt_ > 0 && nowSeconds() >= facingCheckAt_) {
+        facingCheckAt_ = 0;
+        logFacingCheck(facingCheckConfig_);
     }
     if (result.quit) {
         std::fprintf(stderr, "[VR] SteamVR から終了の知らせが来ました\n");

@@ -32,6 +32,12 @@ enum class SettingsAction {
     MoveDown,
     MoveNear,
     MoveFar,
+    YawLeft,      ///< 面を左へ向ける（yaw を減らす）
+    YawRight,     ///< 面を右へ向ける（yaw を増やす）
+    PitchUp,      ///< 面を上へ向ける（pitch を増やす）
+    PitchDown,    ///< 面を下へ向ける（pitch を減らす）
+    FaceMe,       ///< 今の位置のまま、面を頭に向ける
+    FaceForward,  ///< 回転なし（0, 0, 0）に戻す
     SizeDown,
     SizeUp,
     AlphaDown,
@@ -150,7 +156,7 @@ private:
     bool quitArmed_ = false;
     double quitArmedUntil_ = 0.0;
 
-    /** 左右のカードのボタンの配置を作る（起動時に 1 回。下の段は render() のたびに置き直す）。 */
+    /** 左右と向きのカードのボタンの配置を作る（起動時に 1 回。下の段は render() のたびに置き直す）。 */
     void layoutButtons();
 
     /**
@@ -231,6 +237,14 @@ private:
      * @param config 今の設定
      */
     void drawPositionCard(const Pen& pen, const UiText& text, const Config& config) const;
+
+    /**
+     * 下の横長のカード「向き」（左右・上下の向き、自分に向ける、正面向き、いまの向き）を描く。
+     * @param pen 描画の道具
+     * @param text 言語の表
+     * @param config 今の設定
+     */
+    void drawFacingCard(const Pen& pen, const UiText& text, const Config& config) const;
 
     /**
      * 下の段（言語・自動起動・終了）と、いちばん下の 1 行の説明を描く。

@@ -42,6 +42,9 @@ struct Config {
     double posX = -0.15;            ///< HMD 基準の位置（m）。右が +x
     double posY = -0.12;            ///< 上が +y
     double posZ = -0.50;            ///< 前が -z
+    double yawDeg = 0.0;            ///< 左右の向き（度）。正でパネルの面が右（+x）を向く（-180〜180）
+    double pitchDeg = 0.0;          ///< 上下の傾き（度）。正でパネルの面が上（+y）を向く（-90〜90）
+    double rollDeg = 0.0;           ///< 画面内の回転（度）。正で面の側から見て反時計回り（-180〜180）
     double widthM = 0.20;           ///< パネルの幅（m）
     double alpha = 0.9;             ///< パネル全体の不透明度（0〜1）
     int updateIntervalMs = 500;     ///< 更新間隔（ms）
@@ -79,10 +82,37 @@ bool loadConfig(const std::string& path, Config& out, std::vector<std::string>& 
 bool saveConfig(const std::string& path, const Config& config, std::string& error);
 
 /**
- * 表示まわり（表示の有無・位置・幅・透明度）だけ既定値に戻す。言語・しきい値・フォントはそのまま。
+ * 表示まわり（表示の有無・位置・向き・幅・透明度）だけ既定値に戻す。言語・しきい値・フォントはそのまま。
  * @param config 書き換える設定
  */
 void resetDisplaySettings(Config& config);
+
+/**
+ * パネルの回転行列（HMD 基準）を作る。性能パネルの変換は「位置 × この回転」。
+ * パネル自身の軸で見て yaw → pitch → roll の順に回す（内因的な Y-X-Z の順）。
+ * 行列では R = Ry(yaw) · Rx(−pitch) · Rz(roll)（右手系、列ベクトル）。pitch だけ符号を反転しているのは、
+ * 設定の pitch を「正で面が上を向く」にそろえるため（X 軸まわりの右手の回転は正で面が下を向く）。
+ * 回転なしのとき、パネルの表（+z 側）は頭の方（HMD の +z = 後ろ）を向く。
+ * @param config 設定（yawDeg / pitchDeg / rollDeg を使う）
+ * @param r 書き込み先（r[行][列]）
+ */
+void panelRotation(const Config& config, double r[3][3]);
+
+/**
+ * 今の位置のまま、パネルの表が頭（HMD 基準の原点）を向くように yaw と pitch を決める。roll は 0 にする。
+ * 表の向き（法線）は R·(0,0,1) = (sin yaw·cos pitch, sin pitch, cos yaw·cos pitch) なので、
+ * これが「パネルから原点への向き」−pos / |pos| と一致するように
+ * yaw = atan2(−x, −z)、pitch = atan2(−y, √(x² + z²)) とする（0.1° 単位に丸める）。
+ * @param config 書き換える設定
+ */
+void faceHead(Config& config);
+
+/**
+ * 今の向きが faceHead() で決まる向きとほぼ同じか（設定パネルの ✓ 用）。
+ * @param config 設定
+ * @return yaw・pitch の差が 0.25° 未満で roll が 0 なら true
+ */
+bool isFacingHead(const Config& config);
 
 /**
  * 設定ファイルの更新時刻を見て、変わっていたら読み直すための小さな監視役。

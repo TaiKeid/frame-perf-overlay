@@ -82,6 +82,17 @@ struct UiText {
     const char* posX;
     const char* posY;
     const char* posZ;
+    const char* cardFacing;     ///< 向きのカードの見出し
+    const char* yawLeft;        ///< 面を左へ向ける
+    const char* yawRight;       ///< 面を右へ向ける
+    const char* pitchUp;        ///< 面を上へ向ける
+    const char* pitchDown;      ///< 面を下へ向ける
+    const char* faceMe;         ///< 自分に向ける
+    const char* faceForward;    ///< 正面向き（回転なし）
+    const char* facingNow;      ///< いまの向き（後ろに左右・上下・回転が続く）
+    const char* yawName;
+    const char* pitchName;
+    const char* rollName;
     const char* footer;         ///< 変更はすぐ反映される旨
 };
 

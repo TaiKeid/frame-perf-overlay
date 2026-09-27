@@ -13,9 +13,9 @@
 
 namespace {
 
-// 1200×650 を幅 2.8m で出す（1px あたりの大きさは前の 1024px / 2.4m とほぼ同じ）
+// 1200×826 を幅 2.8m で出す（1px あたりの大きさは前の 1024px / 2.4m とほぼ同じ）
 constexpr int kWidth = 1200;
-constexpr int kHeight = 650;
+constexpr int kHeight = 826;
 constexpr double kPad = 28;          // パネルの外側の余白
 constexpr double kButtonH = 68;      // ボタンの高さ（レーザーで押しやすい大きさ。前と同じ）
 constexpr double kCardY = 84;        // 左右のカードの上端
@@ -41,14 +41,25 @@ constexpr double kNudgeY = kPresetY + 2 * kButtonH + kPresetGap + 40;  // 微調
 constexpr double kArrowW = 106;
 constexpr double kDepthX = 982;                    // 近く / 遠く
 constexpr double kDepthW = 170;
+// 下の横長のカード「向き」
+constexpr double kCardGap = 24;                    // カードどうしの間（左右のカードの間と同じ）
+constexpr double kFacingCardY = kCardY + kCardH + kCardGap;
+constexpr double kFacingCardH = 152;
+constexpr double kFacingCardX = kPad;
+constexpr double kFacingCardW = kWidth - kPad * 2;
+constexpr double kFacingRowY = kFacingCardY + 64;  // ボタンの上端（ほかのカードと同じ）
+constexpr double kFacingArrowW = 150;              // ← 左向き / 右向き → / ↑ 上向き / ↓ 下向き
+constexpr double kFacingGroupGap = 28;             // 左右・上下・自分に向けるの組の間
+constexpr double kFaceMeW = 215;
 // 下の段
-constexpr double kFooterY = 532;
+constexpr double kFooterY = kFacingCardY + kFacingCardH + kCardGap;
 constexpr double kFooterSegmentW = 240;
 constexpr double kQuitW = 230;
 
 constexpr double kNudgeM = 0.02;       // 上下左右の微調整（m）
 constexpr double kDepthStepM = 0.05;   // 前後の微調整（m）
 constexpr double kPresetDistance = 0.5;  // プリセットの座標はこの距離での値
+constexpr double kAngleStepDeg = 5.0;    // 向きの 1 回の変化（度）
 
 /** 位置のプリセット（距離 0.5m での x, y）。 */
 struct Preset {
@@ -102,6 +113,40 @@ std::string signedCm(double meters) {
     return text;
 }
 
+/**
+ * 角度を 5° 刻みの次の目盛りへ進める（例: 16.7° から増やすと 20°、減らすと 15°）。範囲の外には出さない。
+ * @param degrees 今の角度（度）
+ * @param direction +1 で増やす、-1 で減らす
+ * @param limit 範囲（±limit）
+ * @return 新しい角度（度）
+ */
+double stepAngle(double degrees, int direction, double limit) {
+    const double steps = degrees / kAngleStepDeg;
+    const double next = direction > 0 ? std::floor(steps + 1e-6) + 1 : std::ceil(steps - 1e-6) - 1;
+    return std::clamp(next * kAngleStepDeg, -limit, limit);
+}
+
+/**
+ * 符号つきの度の表記にする（例: −17°）。
+ * @param degrees 値（度）
+ * @return 文字列
+ */
+std::string signedDegrees(double degrees) {
+    char text[32];
+    const long whole = std::lround(degrees);
+    std::snprintf(text, sizeof(text), "%s%ld°", whole < 0 ? "−" : "", std::labs(whole));
+    return text;
+}
+
+/**
+ * 回転なし（0, 0, 0）か。
+ * @param config 設定
+ * @return 3 つとも 0 なら true
+ */
+bool isFacingForward(const Config& config) {
+    return config.yawDeg == 0.0 && config.pitchDeg == 0.0 && config.rollDeg == 0.0;
+}
+
 }  // namespace
 
 bool applySettingsAction(SettingsAction action, Config& config) {
@@ -120,6 +165,8 @@ bool applySettingsAction(SettingsAction action, Config& config) {
                 const double scale = distanceScale(config);
                 config.posX = roundMm(preset.x * scale);
                 config.posY = roundMm(preset.y * scale);
+                // 隅に置くと斜めから見ることになるので、置いた位置で面を頭に向ける
+                faceHead(config);
             }
             break;
         case SettingsAction::MoveLeft: config.posX = roundMm(config.posX - kNudgeM); break;
@@ -139,6 +186,17 @@ bool applySettingsAction(SettingsAction action, Config& config) {
             config.posZ = newZ;
             break;
         }
+        // 向き（位置は変えない）
+        case SettingsAction::YawLeft: config.yawDeg = stepAngle(config.yawDeg, -1, 180.0); break;
+        case SettingsAction::YawRight: config.yawDeg = stepAngle(config.yawDeg, +1, 180.0); break;
+        case SettingsAction::PitchUp: config.pitchDeg = stepAngle(config.pitchDeg, +1, 90.0); break;
+        case SettingsAction::PitchDown: config.pitchDeg = stepAngle(config.pitchDeg, -1, 90.0); break;
+        case SettingsAction::FaceMe: faceHead(config); break;
+        case SettingsAction::FaceForward:
+            config.yawDeg = 0.0;
+            config.pitchDeg = 0.0;
+            config.rollDeg = 0.0;
+            break;
         case SettingsAction::SizeDown: config.widthM = std::clamp(roundMm(config.widthM - 0.02), 0.06, 1.0); break;
         case SettingsAction::SizeUp: config.widthM = std::clamp(roundMm(config.widthM + 0.02), 0.06, 1.0); break;
         case SettingsAction::AlphaDown:
@@ -156,7 +214,8 @@ bool applySettingsAction(SettingsAction action, Config& config) {
         case SettingsAction::None: break;
     }
     return config.visible != before.visible || config.posX != before.posX || config.posY != before.posY ||
-           config.posZ != before.posZ || config.widthM != before.widthM || config.alpha != before.alpha ||
+           config.posZ != before.posZ || config.yawDeg != before.yawDeg || config.pitchDeg != before.pitchDeg ||
+           config.rollDeg != before.rollDeg || config.widthM != before.widthM || config.alpha != before.alpha ||
            config.language != before.language;
 }
 
@@ -219,6 +278,20 @@ void SettingsPanel::layoutButtons() {
     add(SettingsAction::MoveRight, arrowCol[2], arrowRow2, kArrowW, kButtonH);
     add(SettingsAction::MoveNear, kDepthX, kNudgeY, kDepthW, kButtonH);
     add(SettingsAction::MoveFar, kDepthX, arrowRow2, kDepthW, kButtonH);
+
+    // 下のカード「向き」: 左右の組・上下の組・自分に向ける / 正面向きを 1 列に
+    double x = kFacingCardX + kCardPad;
+    add(SettingsAction::YawLeft, x, kFacingRowY, kFacingArrowW, kButtonH);
+    x += kFacingArrowW + kPresetGap;
+    add(SettingsAction::YawRight, x, kFacingRowY, kFacingArrowW, kButtonH);
+    x += kFacingArrowW + kFacingGroupGap;
+    add(SettingsAction::PitchUp, x, kFacingRowY, kFacingArrowW, kButtonH);
+    x += kFacingArrowW + kPresetGap;
+    add(SettingsAction::PitchDown, x, kFacingRowY, kFacingArrowW, kButtonH);
+    x += kFacingArrowW + kFacingGroupGap;
+    add(SettingsAction::FaceMe, x, kFacingRowY, kFaceMeW, kButtonH);
+    x += kFaceMeW + kPresetGap;
+    add(SettingsAction::FaceForward, x, kFacingRowY, kFacingCardX + kFacingCardW - kCardPad - x, kButtonH);
     // 下の段の言語・自動起動・終了は、見出しの幅が言語で変わるので render() のたびに置き直す
 }
 
@@ -240,6 +313,12 @@ std::string SettingsPanel::labelOf(SettingsAction action, const UiText& text) co
         case SettingsAction::MoveDown: return text.moveDown;
         case SettingsAction::MoveNear: return text.nearer;
         case SettingsAction::MoveFar: return text.farther;
+        case SettingsAction::YawLeft: return text.yawLeft;
+        case SettingsAction::YawRight: return text.yawRight;
+        case SettingsAction::PitchUp: return text.pitchUp;
+        case SettingsAction::PitchDown: return text.pitchDown;
+        case SettingsAction::FaceMe: return text.faceMe;
+        case SettingsAction::FaceForward: return text.faceForward;
         case SettingsAction::SizeDown:
         case SettingsAction::AlphaDown: return "−";
         case SettingsAction::SizeUp:
@@ -470,6 +549,25 @@ void SettingsPanel::drawPositionCard(const Pen& pen, const UiText& text, const C
     }
 }
 
+void SettingsPanel::drawFacingCard(const Pen& pen, const UiText& text, const Config& config) const {
+    drawCard(pen, kFacingCardX, kFacingCardY, kFacingCardW, kFacingCardH, 20, kCard, kCard, 0);
+    pen.text(kFacingCardX + kCardPad, kFacingCardY + 42, text.cardFacing, 24, kText, true);
+    // いまの向き（度）を見出しの右に。roll は設定ファイルでだけ変えるので、0 でないときだけ出す
+    std::string now = std::string(text.facingNow) + "  " + text.yawName + " " + signedDegrees(config.yawDeg) + "  " +
+                      text.pitchName + " " + signedDegrees(config.pitchDeg);
+    if (std::lround(config.rollDeg) != 0) now += std::string("  ") + text.rollName + " " + signedDegrees(config.rollDeg);
+    const double nowSize = fitSize(pen, now, 18, 13, kFacingCardW - kCardPad * 2 - 160, false);
+    pen.text(kFacingCardX + kFacingCardW - kCardPad, kFacingCardY + 40, now, nowSize, kTextMuted, false, true);
+
+    for (const SettingsAction action :
+         {SettingsAction::YawLeft, SettingsAction::YawRight, SettingsAction::PitchUp, SettingsAction::PitchDown}) {
+        drawButton(pen, text, action, false, 24);
+    }
+    // 今その向きになっていれば ✓（位置のプリセットと同じ見せ方）
+    drawButton(pen, text, SettingsAction::FaceMe, isFacingHead(config), 24);
+    drawButton(pen, text, SettingsAction::FaceForward, isFacingForward(config), 24);
+}
+
 void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const Config& config,
                                const AutostartStatus& autostart) {
     const double y = kFooterY;
@@ -541,10 +639,12 @@ void SettingsPanel::render(const Config& config, const AutostartStatus& autostar
     pen.roundedRect(0, 0, kWidth, kHeight, 24);
     cairo_fill(cr_);
 
-    // 上 = 見出しと状態のピル、左のカード = パネル、右のカード = 位置、下 = 言語・自動起動・終了と説明
+    // 上 = 見出しと状態のピル、左のカード = パネル、右のカード = 位置、その下の横長のカード = 向き、
+    // 下 = 言語・自動起動・終了と説明
     drawHeader(pen, t, config);
     drawPanelCard(pen, t, config);
     drawPositionCard(pen, t, config);
+    drawFacingCard(pen, t, config);
     drawFooter(pen, t, config, autostart);
 
     cairo_surface_flush(surface_);

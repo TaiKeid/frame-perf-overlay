@@ -10,7 +10,7 @@ Recorded inside the headset while playing Half-Life: Alyx (no sound). The panel 
 
 ![The performance panel](docs/images/panel-en.png)
 
-The panel follows your head and sits in the lower left of your view by default. Position, size, opacity and language (English / Japanese) can be changed from the SteamVR dashboard.
+The panel follows your head and sits in the lower left of your view by default. Position, facing, size, opacity and language (English / Japanese) can be changed from the SteamVR dashboard.
 
 ![The settings tab in the SteamVR dashboard](docs/images/settings-en.png)
 
@@ -77,10 +77,13 @@ Options:
   | Show: On / Off | Show or hide the panel. While hidden, nothing is read or drawn |
   | Size − / + | Panel width in 2 cm steps (6 cm to 1 m) |
   | Opacity − / + | In 10 % steps (20 % to 100 %) |
-  | Reset | Put show, position, size and opacity back to the defaults |
-  | Top L / Top R / Bottom L / Bottom C / Bottom R | Move the panel to that corner of your view |
-  | ← Left / Right → / ↑ Up / ↓ Down | Nudge the panel by 2 cm |
+  | Reset | Put show, position, facing, size and opacity back to the defaults |
+  | Top L / Top R / Bottom L / Bottom C / Bottom R | Move the panel to that corner of your view and turn it to face you |
+  | ← Left / Right → / ↑ Up / ↓ Down | Nudge the panel by 2 cm. The facing stays as it is |
   | Closer / Farther | Move it 5 cm nearer or further (20 cm to 3 m), keeping the direction |
+  | Facing: ← Left / Right → / ↑ Up / ↓ Down | Turn the panel's face in 5° steps (left/right up to ±180°, up/down up to ±90°) |
+  | Face me | Keep the position and turn the panel so it faces your head |
+  | Face ahead | Remove the rotation, so the panel is parallel to your face again (the look before this feature) |
   | Language | English or Japanese, applied immediately |
   | Autostart: On / Off | Turn the systemd service on or off. Takes effect from the next SteamVR start |
   | Quit app | Click twice within 3 seconds to quit |
@@ -100,6 +103,7 @@ A file with every key at its default value is in [`contrib/config.example.json`]
 | `visible` | `true` | `false` hides the panel (and stops reading and drawing) |
 | `language` | your Steam language | `"en"` (English) or `"ja"` (Japanese) |
 | `position.x` / `.y` / `.z` | `-0.15` / `-0.12` / `-0.5` | Panel center relative to your head, in meters. +x is right, +y is up, −z is forward |
+| `rotation.yaw` / `.pitch` / `.roll` | `0` / `0` / `0` | Panel rotation in degrees. `yaw` turns the face left/right (positive = toward +x, −180 to 180), `pitch` tilts it up/down (positive = up, −90 to 90), `roll` spins it in its own plane (positive = counterclockwise as you look at it, −180 to 180). Applied in the order yaw → pitch → roll. All 0 keeps the panel parallel to your face. "Face me" and the corner buttons set yaw and pitch and reset roll to 0; roll can only be set here |
 | `width_m` | `0.2` | Panel width in meters. The height follows from the aspect ratio (512 × 434) |
 | `alpha` | `0.9` | Opacity of the whole panel (0 to 1) |
 | `update_interval_ms` | `500` | Update interval (100 to 5000 ms) |

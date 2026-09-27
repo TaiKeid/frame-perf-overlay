@@ -23,6 +23,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <fstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -592,12 +593,18 @@ bool acquireInstanceLock(int& lockFd, pid_t& holderPid) {
 }
 
 /**
- * systemd のサービスとして起動されたかどうか（systemd はサービスに INVOCATION_ID を渡す）。
+ * このアプリの systemd サービス（frame-perf-overlay.service）として起動されたかどうか。
+ * INVOCATION_ID は Steam（これもサービス）から＋で起動した子にも引き継がれるので使えない。
+ * 自分の cgroup がこのアプリのユニットかどうかで見分ける。
  * @return サービスとして動いていれば true
  */
 bool runningAsService() {
-    const char* id = std::getenv("INVOCATION_ID");
-    return id != nullptr && id[0] != '\0';
+    std::ifstream file("/proc/self/cgroup");
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.find("/frame-perf-overlay.service") != std::string::npos) return true;
+    }
+    return false;
 }
 
 /**
@@ -658,6 +665,7 @@ int runOverlay(const Options& options) {
     Autostart autostart;  // 自動起動（systemd ユーザーサービス）の状態と切り替え
     PanelState state;
     VrOverlay vr;
+    vr.setVerbose(options.verbose);
 
     // SteamVR を待つ
     std::string lastMessage;

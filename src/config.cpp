@@ -10,6 +10,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -176,7 +177,7 @@ bool loadConfig(const std::string& path, Config& out, std::vector<std::string>& 
 
     Config config;  // 書かれていない項目は既定値
     warnUnknownKeys(root,
-                    {"visible", "language", "position", "width_m", "alpha", "update_interval_ms", "graph_seconds",
+                    {"visible", "language", "position", "rotation", "width_m", "alpha", "update_interval_ms", "graph_seconds",
                      "font", "font_bold", "thresholds"},
                     "", warnings);
     readBool(root, "visible", config.visible, warnings);
@@ -191,6 +192,16 @@ bool loadConfig(const std::string& path, Config& out, std::vector<std::string>& 
             readNumber(*position, "z", -5.0, 5.0, config.posZ, warnings);
         } else {
             warnings.push_back("position は {\"x\":..,\"y\":..,\"z\":..} で書いてください");
+        }
+    }
+    if (const JsonValue* rotation = root.get("rotation")) {
+        if (rotation->isObject()) {
+            warnUnknownKeys(*rotation, {"yaw", "pitch", "roll"}, "rotation.", warnings);
+            readNumber(*rotation, "yaw", -180.0, 180.0, config.yawDeg, warnings);
+            readNumber(*rotation, "pitch", -90.0, 90.0, config.pitchDeg, warnings);
+            readNumber(*rotation, "roll", -180.0, 180.0, config.rollDeg, warnings);
+        } else {
+            warnings.push_back("rotation は {\"yaw\":..,\"pitch\":..,\"roll\":..} で書いてください（度）");
         }
     }
     readNumber(root, "width_m", 0.03, 2.0, config.widthM, warnings);
@@ -266,6 +277,8 @@ bool saveConfig(const std::string& path, const Config& config, std::string& erro
         << "  \"language\": \"" << languageCode(config.language) << "\",\n"
         << "  \"position\": { \"x\": " << jsonNumber(config.posX) << ", \"y\": " << jsonNumber(config.posY)
         << ", \"z\": " << jsonNumber(config.posZ) << " },\n"
+        << "  \"rotation\": { \"yaw\": " << jsonNumber(config.yawDeg) << ", \"pitch\": " << jsonNumber(config.pitchDeg)
+        << ", \"roll\": " << jsonNumber(config.rollDeg) << " },\n"
         << "  \"width_m\": " << jsonNumber(config.widthM) << ",\n"
         << "  \"alpha\": " << jsonNumber(config.alpha) << ",\n"
         << "  \"update_interval_ms\": " << config.updateIntervalMs << ",\n"
@@ -324,8 +337,72 @@ void resetDisplaySettings(Config& config) {
     config.posX = defaults.posX;
     config.posY = defaults.posY;
     config.posZ = defaults.posZ;
+    config.yawDeg = defaults.yawDeg;
+    config.pitchDeg = defaults.pitchDeg;
+    config.rollDeg = defaults.rollDeg;
     config.widthM = defaults.widthM;
     config.alpha = defaults.alpha;
+}
+
+namespace {
+
+constexpr double kDegToRad = M_PI / 180.0;
+
+/**
+ * 0.1° 単位に丸める（小数の誤差を設定ファイルに残さない）。
+ * @param degrees 角度（度）
+ * @return 丸めた値
+ */
+double roundTenthDegree(double degrees) {
+    return std::round(degrees * 10.0) / 10.0 + 0.0;  // + 0.0 で −0 を 0 にする（ファイルに "-0" と書かない）
+}
+
+/**
+ * faceHead() の yaw と pitch を計算する（丸める前の値）。
+ * @param config 設定（位置だけ使う）
+ * @param yaw yaw の書き込み先（度）
+ * @param pitch pitch の書き込み先（度）
+ */
+void headFacingAngles(const Config& config, double& yaw, double& pitch) {
+    // 原点と同じ位置のときは atan2(0, 0) = 0 になり、正面向きのまま
+    yaw = std::atan2(-config.posX, -config.posZ) / kDegToRad;
+    pitch = std::atan2(-config.posY, std::hypot(config.posX, config.posZ)) / kDegToRad;
+}
+
+}  // namespace
+
+void panelRotation(const Config& config, double r[3][3]) {
+    const double cy = std::cos(config.yawDeg * kDegToRad), sy = std::sin(config.yawDeg * kDegToRad);
+    const double cp = std::cos(config.pitchDeg * kDegToRad), sp = std::sin(config.pitchDeg * kDegToRad);
+    const double cr = std::cos(config.rollDeg * kDegToRad), sr = std::sin(config.rollDeg * kDegToRad);
+    // Ry(yaw) = [cy 0 sy; 0 1 0; −sy 0 cy]、Rx(−pitch) = [1 0 0; 0 cp sp; 0 −sp cp]、Rz(roll) = [cr −sr 0; sr cr 0; 0 0 1]
+    // を掛けた R = Ry · Rx(−pitch) · Rz。3 列目（パネルの表の向き）は (sy·cp, sp, cy·cp)
+    r[0][0] = cy * cr - sy * sp * sr;
+    r[0][1] = -cy * sr - sy * sp * cr;
+    r[0][2] = sy * cp;
+    r[1][0] = cp * sr;
+    r[1][1] = cp * cr;
+    r[1][2] = sp;
+    r[2][0] = -sy * cr - cy * sp * sr;
+    r[2][1] = sy * sr - cy * sp * cr;
+    r[2][2] = cy * cp;
+}
+
+void faceHead(Config& config) {
+    double yaw = 0.0;
+    double pitch = 0.0;
+    headFacingAngles(config, yaw, pitch);
+    config.yawDeg = roundTenthDegree(yaw);
+    config.pitchDeg = roundTenthDegree(pitch);
+    config.rollDeg = 0.0;
+}
+
+bool isFacingHead(const Config& config) {
+    double yaw = 0.0;
+    double pitch = 0.0;
+    headFacingAngles(config, yaw, pitch);
+    return std::fabs(config.yawDeg - yaw) < 0.25 && std::fabs(config.pitchDeg - pitch) < 0.25 &&
+           std::fabs(config.rollDeg) < 0.05;
 }
 
 void ConfigWatcher::noteSaved() {
