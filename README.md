@@ -140,10 +140,29 @@ The **Autostart** switch in the dashboard runs the same `enable` / `disable` (wi
 - **"No SteamVR" in the frame row**: the app isn't connected to SteamVR yet. It retries every 3 seconds.
 - **Wrong font or boxes instead of text**: check `font` / `font_bold` in the settings file.
 
+## How accurate the values are
+
+Some values were checked against another source on a Steam Frame; others are estimates. Treat the second group as a rough guide.
+
+**Checked against another source**
+
+- **fps and reprojection**: match SteamVR's own frame timing records.
+- **CPU usage and clocks, GPU clock, memory, headset battery**: match `top` and the raw values in `/proc` and `/sys`.
+- **CPU, GPU and battery temperatures**: within 1 to 2 °C of the raw sensor values.
+- **Fan speed**: the raw tachometer value divided by 2, the same conversion SteamOS's own fan control uses.
+
+**Estimates**
+
+- **Power**: which circuit each power channel measures isn't documented. The main rail looks like the total supply, but that is a guess, and the "all channels" sum may count some power twice.
+- **GPU usage**: adds up the GPU time the kernel reports for your user's processes. Work done by root processes isn't counted, overlapping work is capped at 100 %, and a process that starts using the GPU can take up to 30 seconds to be counted.
+- **fps while streaming with Steam Link**: not yet checked whether frames dropped on the PC or on the network always show up as a lower fps.
+- **Steam Link throughput**: counts all traffic on the direct wireless link, not only the stream.
+- **Display, exhaust and heat sink temperatures**: the names come from the sensor names; where exactly each sensor sits isn't documented.
+- **Controller batteries**: shown as SteamVR reports them.
+
 ## Known issues
 
-- GPU usage is an estimate. It adds up the GPU time the kernel reports for your user's processes, so work done by root processes isn't counted, and overlapping work is capped at 100 %. A process that starts using the GPU can take up to 30 seconds to be counted.
-- Which circuit each power channel measures isn't documented. The main rail looks like the total supply; the "all channels" sum may count some power twice.
+- Some values are estimates. See [How accurate the values are](#how-accurate-the-values-are).
 - CPU temperature is the hottest core, so it jumps by 1 to 2 °C under short bursts of load.
 - The power sensors themselves only update every 1.5 to 2 seconds, so power is read every 2 seconds and the battery every 5 seconds.
 - The dashboard's close button says "Close", not "Quit", because the app isn't a Steam app.
