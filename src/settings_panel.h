@@ -17,6 +17,12 @@ typedef struct _cairo_surface cairo_surface_t;
 /** 設定パネルのボタンが表す操作。 */
 enum class SettingsAction {
     None,
+    ChangePage,
+    AttachHead, AttachLeft, AttachRight,
+    OffsetXDown, OffsetXUp, OffsetYDown, OffsetYUp, OffsetZDown, OffsetZUp,
+    PitchDown, PitchUp, YawDown, YawUp, RollDown, RollUp,
+    ClockOff, Clock12, Clock24,
+    FadeOn, FadeOff, FadeAngleDown, FadeAngleUp,
     ShowOn,
     ShowOff,
     LanguageJa,
@@ -126,6 +132,7 @@ public:
      * 見た目の確認用に「もう一度押すと終了」の状態にする（--dump-settings-png 用）。
      */
     void armQuitForPreview();
+    void showWristPage();
 
     /** @return 画像の幅（px） */
     int width() const;
@@ -144,6 +151,9 @@ private:
     cairo_t* cr_ = nullptr;
     std::vector<uint8_t> rgba_;
     std::vector<Button> buttons_;
+    bool wristPage_ = false;
+    bool wristSelected_ = false;
+    Language language_ = Language::En;
     SettingsAction hover_ = SettingsAction::None;
     bool autostartInstalled_ = true;  ///< 最後に描いたときユニットがあったか（無ければ自動起動のボタンは押せない）
     SettingsAction pressed_ = SettingsAction::None;
@@ -222,6 +232,8 @@ private:
      * @param text 言語の表
      * @param config 今の設定
      */
+    void drawWristPage(const Pen& pen, const UiText& text, const Config& config) const;
+
     void drawPanelCard(const Pen& pen, const UiText& text, const Config& config) const;
 
     /**

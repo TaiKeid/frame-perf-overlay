@@ -1,3 +1,10 @@
+## 0.1.0-tai.1 (local branch, 2026-09-27)
+
+- Add local-time clock with Off / 12h / 24h controls.
+- Add Head / Left wrist / Right wrist attachment, independent wrist offsets and Euler rotations.
+- Add adjustable view-angle fade with temporal smoothing and immediate hiding on tracking loss.
+- Add English/Japanese wrist settings page and CTest coverage for geometry, tracking, configuration, clock and controls.
+
 # 変更履歴
 
 ## 0.1.0 — 2026-09-27

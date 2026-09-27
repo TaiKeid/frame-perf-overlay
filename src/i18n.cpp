@@ -154,3 +154,19 @@ bool parseLanguage(const std::string& code, Language& language) {
     }
     return false;
 }
+
+const WristUiText& wristUiText(Language language) {
+    static const WristUiText en {
+        "Wrist & clock", "Panel & position", "Attachment", "Head", "Left wrist", "Right wrist",
+        "Offsets (cm): X right / Y up / Z back", "Select a wrist to edit its offsets and rotation",
+        "Clock", "Rotation (degrees)", "Pitch X", "Yaw Y", "Roll Z",
+        "Angle fade", "Fade range", "Head position"
+    };
+    static const WristUiText ja {
+        "手首・時計", "パネル・位置", "固定先", "頭", "左手首", "右手首",
+        "位置 (cm): X 右 / Y 上 / Z 後", "手首を選ぶと位置・回転を調整できます",
+        "時計", "回転 (度)", "ピッチ X", "ヨー Y", "ロール Z",
+        "角度フェード", "フェード範囲", "頭基準の位置"
+    };
+    return language == Language::Ja ? ja : en;
+}

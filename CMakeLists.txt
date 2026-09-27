@@ -18,6 +18,8 @@ pkg_check_modules(LIBNL REQUIRED IMPORTED_TARGET libnl-genl-3.0)
 
 add_executable(frame-perf-overlay
   src/main.cpp
+  src/placement.cpp
+  src/clock.cpp
   src/config.cpp
   src/json.cpp
   src/sensors.cpp
@@ -35,7 +37,7 @@ add_executable(frame-perf-overlay
 target_include_directories(frame-perf-overlay PRIVATE third_party/openvr)
 target_compile_options(frame-perf-overlay PRIVATE -Wall -Wextra)
 # --version で出すバージョン（上の project(VERSION) から）
-target_compile_definitions(frame-perf-overlay PRIVATE FRAME_PERF_OVERLAY_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(frame-perf-overlay PRIVATE FRAME_PERF_OVERLAY_VERSION="${PROJECT_VERSION}-tai.1")
 target_link_libraries(frame-perf-overlay PRIVATE
   PkgConfig::CAIRO
   PkgConfig::FREETYPE
@@ -52,3 +54,14 @@ set_target_properties(frame-perf-overlay PROPERTIES
 )
 
 install(TARGETS frame-perf-overlay RUNTIME DESTINATION bin)
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(wrist-clock-test
+    tests/wrist_clock_test.cpp src/placement.cpp src/clock.cpp src/config.cpp src/json.cpp
+    src/settings_panel.cpp src/draw.cpp src/i18n.cpp src/theme.cpp)
+  target_include_directories(wrist-clock-test PRIVATE src third_party/openvr)
+  target_compile_options(wrist-clock-test PRIVATE -Wall -Wextra)
+  target_link_libraries(wrist-clock-test PRIVATE PkgConfig::CAIRO PkgConfig::FREETYPE)
+  add_test(NAME wrist-clock COMMAND wrist-clock-test)
+endif()

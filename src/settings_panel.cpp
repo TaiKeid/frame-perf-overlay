@@ -106,7 +106,33 @@ std::string signedCm(double meters) {
 
 bool applySettingsAction(SettingsAction action, Config& config) {
     const Config before = config;
+    WristPose& pose = selectedWrist(config);
+    const auto offset = [](double value) { return std::clamp(roundMm(value), -0.5, 0.5); };
+    const auto rotate = [](double value) { return std::remainder(value, 360.0); };
     switch (action) {
+        case SettingsAction::ChangePage: break;
+        case SettingsAction::AttachHead: config.attachment = Attachment::Head; break;
+        case SettingsAction::AttachLeft: config.attachment = Attachment::LeftWrist; break;
+        case SettingsAction::AttachRight: config.attachment = Attachment::RightWrist; break;
+        case SettingsAction::ClockOff: config.clockFormat = 0; break;
+        case SettingsAction::Clock12: config.clockFormat = 12; break;
+        case SettingsAction::Clock24: config.clockFormat = 24; break;
+        case SettingsAction::FadeOn: config.wristFade = true; break;
+        case SettingsAction::FadeOff: config.wristFade = false; break;
+        case SettingsAction::FadeAngleDown: config.wristFadeEndDeg = std::max(35.0, config.wristFadeEndDeg - 5); break;
+        case SettingsAction::FadeAngleUp: config.wristFadeEndDeg = std::min(90.0, config.wristFadeEndDeg + 5); break;
+        case SettingsAction::OffsetXDown: if (config.attachment != Attachment::Head) pose.x = offset(pose.x - 0.01); break;
+        case SettingsAction::OffsetXUp: if (config.attachment != Attachment::Head) pose.x = offset(pose.x + 0.01); break;
+        case SettingsAction::OffsetYDown: if (config.attachment != Attachment::Head) pose.y = offset(pose.y - 0.01); break;
+        case SettingsAction::OffsetYUp: if (config.attachment != Attachment::Head) pose.y = offset(pose.y + 0.01); break;
+        case SettingsAction::OffsetZDown: if (config.attachment != Attachment::Head) pose.z = offset(pose.z - 0.01); break;
+        case SettingsAction::OffsetZUp: if (config.attachment != Attachment::Head) pose.z = offset(pose.z + 0.01); break;
+        case SettingsAction::PitchDown: if (config.attachment != Attachment::Head) pose.pitch = rotate(pose.pitch - 5); break;
+        case SettingsAction::PitchUp: if (config.attachment != Attachment::Head) pose.pitch = rotate(pose.pitch + 5); break;
+        case SettingsAction::YawDown: if (config.attachment != Attachment::Head) pose.yaw = rotate(pose.yaw - 5); break;
+        case SettingsAction::YawUp: if (config.attachment != Attachment::Head) pose.yaw = rotate(pose.yaw + 5); break;
+        case SettingsAction::RollDown: if (config.attachment != Attachment::Head) pose.roll = rotate(pose.roll - 5); break;
+        case SettingsAction::RollUp: if (config.attachment != Attachment::Head) pose.roll = rotate(pose.roll + 5); break;
         case SettingsAction::ShowOn: config.visible = true; break;
         case SettingsAction::ShowOff: config.visible = false; break;
         case SettingsAction::PresetLeftBottom:
@@ -155,7 +181,10 @@ bool applySettingsAction(SettingsAction action, Config& config) {
         case SettingsAction::Quit:  // 終了は呼び出し側で扱う
         case SettingsAction::None: break;
     }
-    return config.visible != before.visible || config.posX != before.posX || config.posY != before.posY ||
+    return config.attachment != before.attachment || config.clockFormat != before.clockFormat ||
+           config.wristFade != before.wristFade || config.wristFadeEndDeg != before.wristFadeEndDeg ||
+           config.leftWrist != before.leftWrist || config.rightWrist != before.rightWrist ||
+           config.visible != before.visible || config.posX != before.posX || config.posY != before.posY ||
            config.posZ != before.posZ || config.widthM != before.widthM || config.alpha != before.alpha ||
            config.language != before.language;
 }
@@ -192,6 +221,32 @@ void SettingsPanel::layoutButtons() {
         add(right, x + w / 2, y, w / 2, kButtonH);
     };
 
+    add(SettingsAction::ChangePage, 620, 24, 245, 44);
+    if (wristPage_) {
+        add(SettingsAction::AttachHead, 48, 148, 166, 68);
+        add(SettingsAction::AttachLeft, 225, 148, 166, 68);
+        add(SettingsAction::AttachRight, 402, 148, 166, 68);
+        const SettingsAction down[] = {SettingsAction::OffsetXDown, SettingsAction::OffsetYDown, SettingsAction::OffsetZDown};
+        const SettingsAction up[] = {SettingsAction::OffsetXUp, SettingsAction::OffsetYUp, SettingsAction::OffsetZUp};
+        for (int i = 0; i < 3; ++i) {
+            add(down[i], 200, 252 + i * 80, 84, 68);
+            add(up[i], 404, 252 + i * 80, 84, 68);
+        }
+        add(SettingsAction::ClockOff, 740, 108, 125, 60);
+        add(SettingsAction::Clock12, 879, 108, 125, 60);
+        add(SettingsAction::Clock24, 1018, 108, 125, 60);
+        const SettingsAction minus[] = {SettingsAction::PitchDown, SettingsAction::YawDown, SettingsAction::RollDown};
+        const SettingsAction plus[] = {SettingsAction::PitchUp, SettingsAction::YawUp, SettingsAction::RollUp};
+        for (int i = 0; i < 3; ++i) {
+            add(minus[i], 632 + i * 177, 280, 78, 60);
+            add(plus[i], 720 + i * 177, 280, 78, 60);
+        }
+        add(SettingsAction::FadeOn, 860, 360, 138, 60);
+        add(SettingsAction::FadeOff, 998, 360, 138, 60);
+        add(SettingsAction::FadeAngleDown, 820, 430, 70, 60);
+        add(SettingsAction::FadeAngleUp, 1080, 430, 70, 60);
+        return;
+    }
     // 左のカード「パネル」: 表示・大きさ・透明度・既定に戻す
     segmented(kRowControlX, kRowY0, kSegmentW, SettingsAction::ShowOn, SettingsAction::ShowOff);
     const double sizeY = kRowY0 + kRowStep;
@@ -223,7 +278,23 @@ void SettingsPanel::layoutButtons() {
 }
 
 std::string SettingsPanel::labelOf(SettingsAction action, const UiText& text) const {
+    const auto& w = wristUiText(language_);
     switch (action) {
+        case SettingsAction::ChangePage: return wristPage_ ? w.back : w.page;
+        case SettingsAction::AttachHead: return w.head;
+        case SettingsAction::AttachLeft: return w.left;
+        case SettingsAction::AttachRight: return w.right;
+        case SettingsAction::ClockOff: return text.off;
+        case SettingsAction::Clock12: return "12h";
+        case SettingsAction::Clock24: return "24h";
+        case SettingsAction::FadeOn: return text.on;
+        case SettingsAction::FadeOff: return text.off;
+        case SettingsAction::OffsetXDown: case SettingsAction::OffsetYDown: case SettingsAction::OffsetZDown:
+        case SettingsAction::PitchDown: case SettingsAction::YawDown: case SettingsAction::RollDown:
+        case SettingsAction::FadeAngleDown: return "−";
+        case SettingsAction::OffsetXUp: case SettingsAction::OffsetYUp: case SettingsAction::OffsetZUp:
+        case SettingsAction::PitchUp: case SettingsAction::YawUp: case SettingsAction::RollUp:
+        case SettingsAction::FadeAngleUp: return "+";
         case SettingsAction::ShowOn: return text.on;
         case SettingsAction::ShowOff: return text.off;
         // 言語の名前は、どちらの言語で表示していてもその言語自身の書き方にする
@@ -255,6 +326,7 @@ std::string SettingsPanel::labelOf(SettingsAction action, const UiText& text) co
 
 SettingsAction SettingsPanel::hitTest(double x, double y) const {
     for (const auto& b : buttons_) {
+        if (!wristSelected_ && b.action >= SettingsAction::OffsetXDown && b.action <= SettingsAction::RollUp) continue;
         const bool isAutostart = b.action == SettingsAction::AutostartOn || b.action == SettingsAction::AutostartOff;
         if (isAutostart && !autostartInstalled_) continue;  // ユニットが無いときは押せない
         if (x >= b.x && x <= b.x + b.w && y >= b.y && y <= b.y + b.h) return b.action;
@@ -272,6 +344,13 @@ bool SettingsPanel::pointerMove(double x, double y) {
 SettingsAction SettingsPanel::pointerDown(double x, double y, double now) {
     hover_ = hitTest(x, y);
     pressed_ = hover_;
+    if (pressed_ == SettingsAction::ChangePage) {
+        wristPage_ = !wristPage_;
+        quitArmed_ = false;
+        hover_ = pressed_ = SettingsAction::None;
+        layoutButtons();
+        return SettingsAction::None;
+    }
     if (pressed_ == SettingsAction::Quit) {
         // 誤って押しても終わらないよう、1 回目は確認の表示にするだけ
         if (quitArmed_ && now <= quitArmedUntil_) return SettingsAction::Quit;
@@ -300,6 +379,11 @@ bool SettingsPanel::tick(double now) {
     if (!quitArmed_ || now <= quitArmedUntil_) return false;
     quitArmed_ = false;
     return true;
+}
+
+void SettingsPanel::showWristPage() {
+    wristPage_ = true;
+    layoutButtons();
 }
 
 void SettingsPanel::armQuitForPreview() {
@@ -377,7 +461,8 @@ void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsActio
                                double size) const {
     const Button* b = findButton(action);
     if (b == nullptr) return;
-    const bool pressed = pressed_ == action;
+    const bool disabled = !wristSelected_ && action >= SettingsAction::OffsetXDown && action <= SettingsAction::RollUp;
+    const bool pressed = !disabled && pressed_ == action;
     const bool hovered = hover_ == action;
     const double r = 18;
     if (selected) {
@@ -398,7 +483,7 @@ void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsActio
     const double textW = pen.measure(label, labelSize, true) + checkW;
     const double tx = b->x + (b->w - textW) / 2;
     if (selected) drawCheck(pen.cr, tx + checkW * 0.4, b->y + b->h / 2, size * 0.72, kOnAccent);
-    pen.text(tx + checkW, centerBaseline(b->y, b->h, labelSize), label, labelSize, selected ? kOnAccent : kText, true);
+    pen.text(tx + checkW, centerBaseline(b->y, b->h, labelSize), label, labelSize, disabled ? kTextDisabled : (selected ? kOnAccent : kText), true);
 }
 
 void SettingsPanel::drawHeader(const Pen& pen, const UiText& text, const Config& config) const {
@@ -454,12 +539,12 @@ void SettingsPanel::drawPanelCard(const Pen& pen, const UiText& text, const Conf
 
 void SettingsPanel::drawPositionCard(const Pen& pen, const UiText& text, const Config& config) const {
     drawCard(pen, kRightCardX, kCardY, kRightCardW, kCardH, 20, kCard, kCard, 0);
-    pen.text(kRightCardX + kCardPad, kCardY + 42, text.rowPosition, 24, kText, true);
+    pen.text(kRightCardX + kCardPad, kCardY + 42, wristUiText(config.language).headPosition, 24, kText, true);
     // いまの位置（HMD から見て、cm）を見出しの右に
     const std::string where = std::string(text.positionNow) + "  " + text.posX + " " + signedCm(config.posX) + "  " +
                               text.posY + " " + signedCm(config.posY) + "  " + text.posZ + " " +
                               signedCm(-config.posZ) + " cm";
-    const double whereSize = fitSize(pen, where, 18, 13, kRightCardW - kCardPad * 2 - 90, false);
+    const double whereSize = fitSize(pen, where, 18, 13, kRightCardW - kCardPad * 2 - 180, false);
     pen.text(kRightCardX + kRightCardW - kCardPad, kCardY + 40, where, whereSize, kTextMuted, false, true);
 
     for (const auto& preset : kPresets) drawButton(pen, text, preset.action, matchesPreset(preset, config), 24);
@@ -468,6 +553,54 @@ void SettingsPanel::drawPositionCard(const Pen& pen, const UiText& text, const C
                                         SettingsAction::MoveRight, SettingsAction::MoveNear, SettingsAction::MoveFar}) {
         drawButton(pen, text, action, false, 24);
     }
+}
+
+void SettingsPanel::drawWristPage(const Pen& pen, const UiText& text, const Config& config) const {
+    const auto& w = wristUiText(config.language);
+    const auto& p = selectedWrist(config);
+    drawCard(pen, kLeftCardX, kCardY, kLeftCardW, kCardH, 20, kCard, kCard, 0);
+    drawCard(pen, kRightCardX, kCardY, kRightCardW, kCardH, 20, kCard, kCard, 0);
+    pen.text(48, 126, w.attachment, 24, kText, true);
+    drawButton(pen, text, SettingsAction::AttachHead, config.attachment == Attachment::Head, 22);
+    drawButton(pen, text, SettingsAction::AttachLeft, config.attachment == Attachment::LeftWrist, 22);
+    drawButton(pen, text, SettingsAction::AttachRight, config.attachment == Attachment::RightWrist, 22);
+    const std::string hint = wristSelected_ ? w.offsets : w.selectWrist;
+    pen.text(48, 240, hint, fitSize(pen, hint, 18, 13, 520, false), kTextMuted);
+    const double offsets[] = {p.x, p.y, p.z};
+    const char* axes[] = {"X", "Y", "Z"};
+    const SettingsAction down[] = {SettingsAction::OffsetXDown, SettingsAction::OffsetYDown, SettingsAction::OffsetZDown};
+    const SettingsAction up[] = {SettingsAction::OffsetXUp, SettingsAction::OffsetYUp, SettingsAction::OffsetZUp};
+    char value[64];
+    for (int i = 0; i < 3; ++i) {
+        const double y = 252 + i * 80;
+        pen.text(85, centerBaseline(y, 68, 24), axes[i], 24, kTextMuted);
+        std::snprintf(value, sizeof(value), "%+.0f", offsets[i] * 100);
+        textCentered(pen, 344, centerBaseline(y, 68, 28), value, 28, wristSelected_ ? kText : kTextDisabled, true);
+        drawButton(pen, text, down[i], false, 28); drawButton(pen, text, up[i], false, 28);
+    }
+    pen.text(632, 147, w.clock, 22, kText, true);
+    drawButton(pen, text, SettingsAction::ClockOff, config.clockFormat == 0, 22);
+    drawButton(pen, text, SettingsAction::Clock12, config.clockFormat == 12, 22);
+    drawButton(pen, text, SettingsAction::Clock24, config.clockFormat == 24, 22);
+    pen.text(632, 202, w.rotation, 20, kTextMuted);
+    const double angles[] = {p.pitch, p.yaw, p.roll};
+    const char* labels[] = {w.pitch, w.yaw, w.roll};
+    const SettingsAction minus[] = {SettingsAction::PitchDown, SettingsAction::YawDown, SettingsAction::RollDown};
+    const SettingsAction plus[] = {SettingsAction::PitchUp, SettingsAction::YawUp, SettingsAction::RollUp};
+    for (int i = 0; i < 3; ++i) {
+        const double x = 715 + i * 177;
+        textCentered(pen, x, 230, labels[i], 18, kTextMuted, false);
+        std::snprintf(value, sizeof(value), "%+.0f°", angles[i]);
+        textCentered(pen, x, 262, value, 26, wristSelected_ ? kText : kTextDisabled, true);
+        drawButton(pen, text, minus[i], false, 28); drawButton(pen, text, plus[i], false, 28);
+    }
+    pen.text(632, 398, w.fade, 22, kTextMuted);
+    drawSegmented(pen, text, SettingsAction::FadeOn, SettingsAction::FadeOff, config.wristFade ? 0 : 1, true);
+    pen.text(632, 468, w.fadeRange, 20, kTextMuted);
+    std::snprintf(value, sizeof(value), "%.0f–%.0f°", config.wristFadeEndDeg - 30, config.wristFadeEndDeg);
+    textCentered(pen, 985, 468, value, 22, kText, true);
+    drawButton(pen, text, SettingsAction::FadeAngleDown, false, 26);
+    drawButton(pen, text, SettingsAction::FadeAngleUp, false, 26);
 }
 
 void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const Config& config,
@@ -531,6 +664,8 @@ void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const Config&
 void SettingsPanel::render(const Config& config, const AutostartStatus& autostart) {
     const Pen pen {cr_, &fonts_};
     const UiText& t = uiText(config.language);
+    language_ = config.language;
+    wristSelected_ = config.attachment != Attachment::Head;
 
     // 地（不透明。コントラスト比は不透明な地で計算している）
     cairo_save(cr_);
@@ -543,8 +678,12 @@ void SettingsPanel::render(const Config& config, const AutostartStatus& autostar
 
     // 上 = 見出しと状態のピル、左のカード = パネル、右のカード = 位置、下 = 言語・自動起動・終了と説明
     drawHeader(pen, t, config);
-    drawPanelCard(pen, t, config);
-    drawPositionCard(pen, t, config);
+    drawButton(pen, t, SettingsAction::ChangePage, false, 20);
+    if (wristPage_) drawWristPage(pen, t, config);
+    else {
+        drawPanelCard(pen, t, config);
+        drawPositionCard(pen, t, config);
+    }
     drawFooter(pen, t, config, autostart);
 
     cairo_surface_flush(surface_);

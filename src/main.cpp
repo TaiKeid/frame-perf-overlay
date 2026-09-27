@@ -492,6 +492,7 @@ int runDumpSettingsPng(const Options& options) {
     if (preview == "notinstalled") autostartView = {AutostartStatus::State::NotInstalled, false, false};
     if (preview == "busy") autostartView = {AutostartStatus::State::Enabled, true, false};
     if (preview == "failed") autostartView = {AutostartStatus::State::Enabled, false, true};
+    if (config.attachment != Attachment::Head) panel.showWristPage();
     panel.render(config, autostartView);
     if (!panel.writePng(options.pngPath)) {
         std::fprintf(stderr, "PNG を書き出せませんでした: %s\n", options.pngPath.c_str());
@@ -703,6 +704,7 @@ int runOverlay(const Options& options) {
         // 細かい周期（設定パネルが見えている間の 50ms）では設定パネルのイベントだけ見て、
         // それ以外の確認は 0.5 秒おきにする（見えていないときはループ自体が性能パネルの更新間隔で回る）
         const double loopStart = nowSeconds();
+        if (config.attachment != Attachment::Head) vr.updatePlacement(config, loopStart);
         const bool slowCheck = loopStart >= nextSlowCheck;
         if (slowCheck) {
             nextSlowCheck = loopStart + kSlowCheckSec;
@@ -846,7 +848,8 @@ int runOverlay(const Options& options) {
         const double wait = nextPanel - now;
         // 見えているだけのときは 100ms、ポインターが動いている間（最後のイベントから 3 秒）は 50ms
         const double pollSec = now - lastPointerEvent < kSettingsActiveHoldSec ? kSettingsPollSec : kSettingsIdlePollSec;
-        sleepInterruptible(settingsVisible ? std::fmin(wait, pollSec) : wait);
+        const double placementPoll = config.attachment != Attachment::Head && config.visible ? 1.0 / 60.0 : wait;
+        sleepInterruptible(std::fmin(placementPoll, settingsVisible ? std::fmin(wait, pollSec) : wait));
     }
 
     // SIGTERM / SIGINT・SteamVR の終了・vrserver の消滅・「アプリを終了」のどれでも同じ終了処理を通す

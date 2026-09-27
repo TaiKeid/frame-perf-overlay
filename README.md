@@ -1,5 +1,7 @@
 # frame-perf-overlay
 
+This local branch adds a clock and controller-attached wrist placement. See [Wrist & clock](#wrist--clock-local-build) below.
+
 A small performance panel for the Steam Frame. It stays in view inside SteamVR and shows the app's frame rate, GPU and CPU load, temperatures, power draw, battery levels and the Steam Link wireless link, so you can see at a glance why a game stutters or the headset gets hot. It runs on the headset itself (aarch64 SteamOS) as an OpenVR overlay.
 
 [日本語版はこちら](README.ja.md)
@@ -89,6 +91,41 @@ Options:
 - **The + button** ("launch a program") in the dashboard lists **Frame Perf Overlay**. If it isn't running, this starts it. If it is already running, launching it again toggles the panel between shown and hidden.
 - **Quitting**: hover over the **Perf** icon at the bottom of the dashboard and press its close button, or use **Quit app** in the settings. It shuts down cleanly and stays off until the next SteamVR start (or until you start it from **+** or with `systemctl --user start frame-perf-overlay`).
 
+## Wrist & clock (local build)
+
+Open **Perf → Wrist & clock**. The top button switches back to the original panel controls.
+
+- **Clock:** Off, 12h (AM/PM), or 24h. Uses the headset's local time zone; 24h is enabled by default. Updates with the performance panel (normally every 500 ms).
+- **Attachment:** Head, Left wrist, or Right wrist. Wrist modes follow the respective **controller**, not bare-hand tracking. Head remains the default and keeps your existing head position.
+- **Offsets:** X/Y/Z buttons move the selected wrist panel in 1 cm steps, limited to ±50 cm. These are controller-local axes: X right, Y up, Z back. Each wrist remembers its own settings.
+- **Rotation:** Pitch X, Yaw Y, and Roll Z change in 5° steps, wrapping at ±180°. Rotations are applied X, then Y, then Z. Initial wrist pose is (0, 5, 8) cm, with pitch −90°; tune it while holding the controller as you normally would.
+- **Angle fade:** On by default for wrists only. The panel is fully visible when its front faces your eyes, fades smoothly as you turn it away, and becomes invisible when facing away. The default fade range is 45–75° between the panel's front normal and the line from the panel to your headset. Use −/+ to move the 30° fade band (ending at 35–90°). Off keeps the wrist panel visible at the selected opacity regardless of angle.
+- Fading is smoothed over time and checked at up to 60 Hz without redrawing sensors at that rate. Controller attachment itself follows SteamVR tracking. Loss of controller or headset tracking hides the wrist panel immediately; valid tracking restores it automatically. **Perf** settings stay accessible even while the wrist panel is hidden.
+- Size and opacity remain on **Panel & position**. Its position controls adjust the saved **head** placement. **Reset** also resets both wrists, attachment, fade, and clock format; language and thresholds are preserved.
+
+Config additions (old config files continue to work):
+
+```json
+{
+  "attachment": "head",
+  "left_wrist": { "x": 0, "y": 0.05, "z": 0.08, "pitch": -90, "yaw": 0, "roll": 0 },
+  "right_wrist": { "x": 0, "y": 0.05, "z": 0.08, "pitch": -90, "yaw": 0, "roll": 0 },
+  "wrist_fade": true,
+  "wrist_fade_end_deg": 75,
+  "clock_format": 24
+}
+```
+
+Build and test on the headset:
+
+```sh
+cmake -G Ninja -S . -B build
+cmake --build build -j2
+ctest --test-dir build --output-on-failure
+```
+
+The custom binary reports `0.1.0-tai.1`. Automated checks cover transforms, facing/back-facing angles, fade smoothing, invalid/lost tracking, clock boundaries, saved settings, and settings button hit tests. Wrist comfort and controller orientation still need in-headset calibration. To render the wrist settings page without SteamVR, use `--dump-settings-png` with a config whose attachment is `left_wrist` or `right_wrist`.
+
 ## Settings file
 
 `~/.config/frame-perf-overlay/config.json` (under `$XDG_CONFIG_HOME` if that is set). If it doesn't exist, the defaults are used. The dashboard writes it for you; you only need to edit it by hand for the thresholds or the fonts. Keys you leave out keep their defaults. Changes are picked up while the app runs (within one update). If the JSON is broken, the app keeps its previous settings and writes the reason to the log. Out-of-range values are clamped and unknown keys are reported in the log.
@@ -100,7 +137,7 @@ A file with every key at its default value is in [`contrib/config.example.json`]
 | `visible` | `true` | `false` hides the panel (and stops reading and drawing) |
 | `language` | your Steam language | `"en"` (English) or `"ja"` (Japanese) |
 | `position.x` / `.y` / `.z` | `-0.15` / `-0.12` / `-0.5` | Panel center relative to your head, in meters. +x is right, +y is up, −z is forward |
-| `width_m` | `0.2` | Panel width in meters. The height follows from the aspect ratio (512 × 434) |
+| `width_m` | `0.2` | Panel width in meters. The height follows from the aspect ratio (512 × 460) |
 | `alpha` | `0.9` | Opacity of the whole panel (0 to 1) |
 | `update_interval_ms` | `500` | Update interval (100 to 5000 ms) |
 | `graph_seconds` | `30` | Seconds shown in the graphs (5 to 300) |

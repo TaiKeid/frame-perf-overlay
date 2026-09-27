@@ -36,7 +36,23 @@ struct Thresholds {
 /**
  * アプリの設定一式。ファイルが無いときはこの既定値で動く。
  */
+enum class Attachment { Head, LeftWrist, RightWrist };
+
+struct WristPose {
+    double x = 0.0, y = 0.05, z = 0.08;  // Controller-local meters.
+    double pitch = -90.0, yaw = 0.0, roll = 0.0;  // Degrees; Rz * Ry * Rx.
+    bool operator!=(const WristPose& p) const {
+        return x != p.x || y != p.y || z != p.z || pitch != p.pitch || yaw != p.yaw || roll != p.roll;
+    }
+};
+
 struct Config {
+    Attachment attachment = Attachment::Head;
+    WristPose leftWrist, rightWrist;
+    bool wristFade = true;
+    double wristFadeEndDeg = 75.0;  // Smooth fade across the preceding 30 degrees.
+    int clockFormat = 24;  // 0 = hidden, 12 or 24; headset local time.
+
     bool visible = true;            ///< false でパネルを隠す（読み取りと描画も止める）
     Language language = systemLanguage();  ///< 画面の文言の言語（"ja" / "en"。既定は Frame のシステム言語）
     double posX = -0.15;            ///< HMD 基準の位置（m）。右が +x
@@ -56,6 +72,9 @@ struct Config {
  * @return 設定ファイルのパス
  */
 std::string defaultConfigPath();
+const char* attachmentName(Attachment attachment);
+WristPose& selectedWrist(Config& config);
+const WristPose& selectedWrist(const Config& config);
 
 /**
  * 設定ファイルを読む。ファイルが無いときは既定値を返して成功扱いにする。

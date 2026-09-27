@@ -2,6 +2,8 @@
 #include "vr_overlay.h"
 
 #include "openvr.h"
+#include "placement.h"
+#include <cmath>
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -145,6 +147,11 @@ VrOverlay::ConnectResult VrOverlay::connect(int panelWidth, int panelHeight, int
         return ConnectResult::Error;
     }
     panelHandle_ = handle;
+    attachedDevice_ = vr::k_unTrackedDeviceIndexInvalid;
+    transformDirty_ = true;
+    panelShown_ = false;
+    wristAlpha_ = 0;
+    lastPlacementTime_ = lastSentAlpha_ = -1;
 
     // 3) Vulkan と性能パネルのテクスチャ
     std::string vkMessage;
@@ -264,25 +271,58 @@ void VrOverlay::shutdown() {
 
 void VrOverlay::applyConfig(const Config& config) {
     if (!connected_ || panelHandle_ == 0) return;
-    vr::IVROverlay* overlay = vr::VROverlay();
-    checkOverlay("SetOverlayWidthInMeters", overlay->SetOverlayWidthInMeters(panelHandle_, static_cast<float>(config.widthM)));
-    checkOverlay("SetOverlayAlpha", overlay->SetOverlayAlpha(panelHandle_, static_cast<float>(config.alpha)));
+    checkOverlay("SetOverlayWidthInMeters", vr::VROverlay()->SetOverlayWidthInMeters(panelHandle_, config.widthM));
+    transformDirty_ = true;
+    updatePlacement(config, nowSeconds());
+}
 
-    // HMD 基準の位置。回転はなし（パネルは顔の正面を向く）
-    vr::HmdMatrix34_t transform = {};
-    transform.m[0][0] = 1.0f;
-    transform.m[1][1] = 1.0f;
-    transform.m[2][2] = 1.0f;
-    transform.m[0][3] = static_cast<float>(config.posX);
-    transform.m[1][3] = static_cast<float>(config.posY);
-    transform.m[2][3] = static_cast<float>(config.posZ);
-    checkOverlay("SetOverlayTransformTrackedDeviceRelative",
-                 overlay->SetOverlayTransformTrackedDeviceRelative(panelHandle_, vr::k_unTrackedDeviceIndex_Hmd, &transform));
-
-    if (config.visible) {
-        checkOverlay("ShowOverlay", overlay->ShowOverlay(panelHandle_));
+void VrOverlay::updatePlacement(const Config& config, double now) {
+    if (!connected_ || panelHandle_ == 0) return;
+    auto* overlay = vr::VROverlay();
+    const bool wrist = config.attachment != Attachment::Head;
+    auto device = vr::k_unTrackedDeviceIndex_Hmd;
+    bool tracked = true;
+    double target = 1.0;
+    vr::HmdMatrix34_t transform{};
+    if (wrist) {
+        device = vr::VRSystem()->GetTrackedDeviceIndexForControllerRole(
+            config.attachment == Attachment::LeftWrist ? vr::TrackedControllerRole_LeftHand : vr::TrackedControllerRole_RightHand);
+        transform = wristTransform(selectedWrist(config));
+        vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount]{};
+        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, poses, vr::k_unMaxTrackedDeviceCount);
+        const auto& head = poses[vr::k_unTrackedDeviceIndex_Hmd];
+        tracked = wristTrackingValid(device, poses);
+        if (tracked && config.wristFade) {
+            target = wristFacingAlpha(composeTransform(poses[device].mDeviceToAbsoluteTracking, transform),
+                                      head.mDeviceToAbsoluteTracking, config.wristFadeEndDeg);
+        }
     } else {
-        checkOverlay("HideOverlay", overlay->HideOverlay(panelHandle_));
+        transform.m[0][0] = transform.m[1][1] = transform.m[2][2] = 1;
+        transform.m[0][3] = config.posX; transform.m[1][3] = config.posY; transform.m[2][3] = config.posZ;
+    }
+    const double elapsed = lastPlacementTime_ < 0 ? 0 : std::max(0.0, now - lastPlacementTime_);
+    lastPlacementTime_ = now;
+    const bool changedDevice = attachedDevice_ != device;
+    if (!tracked || !config.visible || changedDevice) wristAlpha_ = 0;
+    if (tracked && config.visible) {
+        if (transformDirty_ || changedDevice) {
+            const auto error = overlay->SetOverlayTransformTrackedDeviceRelative(panelHandle_, device, &transform);
+            checkOverlay("SetOverlayTransformTrackedDeviceRelative", error);
+            if (error != vr::VROverlayError_None) tracked = false;
+            else { attachedDevice_ = device; transformDirty_ = false; }
+        }
+        if (tracked) wristAlpha_ = wrist ? smoothWristAlpha(wristAlpha_, target, elapsed) : 1.0;
+    }
+    // Tracking loss hides immediately: never leave a stale wrist panel floating in space.
+    const double alpha = tracked && config.visible ? config.alpha * wristAlpha_ : 0.0;
+    if (std::abs(alpha - lastSentAlpha_) > 0.001 || (alpha == 0.0 && lastSentAlpha_ != 0.0)) {
+        checkOverlay("SetOverlayAlpha", overlay->SetOverlayAlpha(panelHandle_, static_cast<float>(alpha)));
+        lastSentAlpha_ = alpha;
+    }
+    const bool show = alpha > 0.001;
+    if (show != panelShown_) {
+        checkOverlay(show ? "ShowOverlay" : "HideOverlay", show ? overlay->ShowOverlay(panelHandle_) : overlay->HideOverlay(panelHandle_));
+        panelShown_ = show;
     }
 }
 

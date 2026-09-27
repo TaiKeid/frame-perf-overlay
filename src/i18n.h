@@ -133,3 +133,11 @@ const char* languageCode(Language language);
  * @return 知っている名前なら true
  */
 bool parseLanguage(const std::string& code, Language& language);
+
+// Wrist attachment / clock settings page.
+struct WristUiText {
+    const char *page, *back, *attachment, *head, *left, *right;
+    const char *offsets, *selectWrist, *clock, *rotation, *pitch, *yaw, *roll;
+    const char *fade, *fadeRange, *headPosition;
+};
+const WristUiText& wristUiText(Language language);

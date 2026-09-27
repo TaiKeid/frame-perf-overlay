@@ -90,6 +90,8 @@ public:
      * @param config 反映する設定
      */
     void applyConfig(const Config& config);
+    // Poll controller role/pose and animate opacity independently of sensor rendering.
+    void updatePlacement(const Config& config, double now);
 
     /**
      * たまったイベントを処理する。SteamVR の終了（VREvent_Quit）には AcknowledgeQuit_Exiting で応える。
@@ -164,6 +166,12 @@ public:
 
 private:
     bool connected_ = false;
+    uint32_t attachedDevice_ = 0xffffffff;  // OpenVR invalid tracked-device index.
+    bool transformDirty_ = true;
+    bool panelShown_ = false;
+    double wristAlpha_ = 0.0;
+    double lastPlacementTime_ = -1.0;
+    double lastSentAlpha_ = -1.0;
     uint64_t panelHandle_ = 0;      ///< vr::VROverlayHandle_t（性能パネル）
     uint64_t dashboardHandle_ = 0;  ///< ダッシュボードの設定パネル
     uint64_t thumbnailHandle_ = 0;  ///< ダッシュボードのサムネイル
