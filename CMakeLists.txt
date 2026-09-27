@@ -37,7 +37,7 @@ add_executable(frame-perf-overlay
 target_include_directories(frame-perf-overlay PRIVATE third_party/openvr)
 target_compile_options(frame-perf-overlay PRIVATE -Wall -Wextra)
 # --version で出すバージョン（上の project(VERSION) から）
-target_compile_definitions(frame-perf-overlay PRIVATE FRAME_PERF_OVERLAY_VERSION="${PROJECT_VERSION}-tai.1")
+target_compile_definitions(frame-perf-overlay PRIVATE FRAME_PERF_OVERLAY_VERSION="${PROJECT_VERSION}-tai.2")
 target_link_libraries(frame-perf-overlay PRIVATE
   PkgConfig::CAIRO
   PkgConfig::FREETYPE

@@ -149,9 +149,9 @@ VrOverlay::ConnectResult VrOverlay::connect(int panelWidth, int panelHeight, int
     panelHandle_ = handle;
     attachedDevice_ = vr::k_unTrackedDeviceIndexInvalid;
     transformDirty_ = true;
-    panelShown_ = false;
-    wristAlpha_ = 0;
-    lastPlacementTime_ = lastSentAlpha_ = -1;
+    wristFade_ = WristFadeState{};
+    presentation_ = PanelPresentationState{};
+    placementRetryPending_ = false;
 
     // 3) Vulkan と性能パネルのテクスチャ
     std::string vkMessage;
@@ -300,30 +300,30 @@ void VrOverlay::updatePlacement(const Config& config, double now) {
         transform.m[0][0] = transform.m[1][1] = transform.m[2][2] = 1;
         transform.m[0][3] = config.posX; transform.m[1][3] = config.posY; transform.m[2][3] = config.posZ;
     }
-    const double elapsed = lastPlacementTime_ < 0 ? 0 : std::max(0.0, now - lastPlacementTime_);
-    lastPlacementTime_ = now;
     const bool changedDevice = attachedDevice_ != device;
-    if (!tracked || !config.visible || changedDevice) wristAlpha_ = 0;
+    placementRetryPending_ = false;
     if (tracked && config.visible) {
         if (transformDirty_ || changedDevice) {
             const auto error = overlay->SetOverlayTransformTrackedDeviceRelative(panelHandle_, device, &transform);
             checkOverlay("SetOverlayTransformTrackedDeviceRelative", error);
-            if (error != vr::VROverlayError_None) tracked = false;
+            if (error != vr::VROverlayError_None) {
+                tracked = false;
+                placementRetryPending_ = true;
+            }
             else { attachedDevice_ = device; transformDirty_ = false; }
         }
-        if (tracked) wristAlpha_ = wrist ? smoothWristAlpha(wristAlpha_, target, elapsed) : 1.0;
     }
     // Tracking loss hides immediately: never leave a stale wrist panel floating in space.
-    const double alpha = tracked && config.visible ? config.alpha * wristAlpha_ : 0.0;
-    if (std::abs(alpha - lastSentAlpha_) > 0.001 || (alpha == 0.0 && lastSentAlpha_ != 0.0)) {
-        checkOverlay("SetOverlayAlpha", overlay->SetOverlayAlpha(panelHandle_, static_cast<float>(alpha)));
-        lastSentAlpha_ = alpha;
-    }
-    const bool show = alpha > 0.001;
-    if (show != panelShown_) {
-        checkOverlay(show ? "ShowOverlay" : "HideOverlay", show ? overlay->ShowOverlay(panelHandle_) : overlay->HideOverlay(panelHandle_));
-        panelShown_ = show;
-    }
+    const double alpha = config.alpha * wristFade_.update(wrist, tracked && config.visible, device, target, now);
+    const bool retryPresentation = presentation_.apply(alpha,
+        [&](double value) {
+            return checkOverlay("SetOverlayAlpha", overlay->SetOverlayAlpha(panelHandle_, static_cast<float>(value)));
+        },
+        [&](bool show) {
+            return checkOverlay(show ? "ShowOverlay" : "HideOverlay",
+                                show ? overlay->ShowOverlay(panelHandle_) : overlay->HideOverlay(panelHandle_));
+        });
+    placementRetryPending_ |= retryPresentation;
 }
 
 VrEvents VrOverlay::pollEvents(bool includeSystem) {

@@ -3,6 +3,7 @@
 
 #include "config.h"
 #include "history.h"
+#include "placement.h"
 #include "vk_texture.h"
 
 #include <cstdint>
@@ -92,6 +93,7 @@ public:
     void applyConfig(const Config& config);
     // Poll controller role/pose and animate opacity independently of sensor rendering.
     void updatePlacement(const Config& config, double now);
+    bool needsPlacementRetry() const { return placementRetryPending_; }
 
     /**
      * たまったイベントを処理する。SteamVR の終了（VREvent_Quit）には AcknowledgeQuit_Exiting で応える。
@@ -168,10 +170,9 @@ private:
     bool connected_ = false;
     uint32_t attachedDevice_ = 0xffffffff;  // OpenVR invalid tracked-device index.
     bool transformDirty_ = true;
-    bool panelShown_ = false;
-    double wristAlpha_ = 0.0;
-    double lastPlacementTime_ = -1.0;
-    double lastSentAlpha_ = -1.0;
+    WristFadeState wristFade_;
+    PanelPresentationState presentation_;
+    bool placementRetryPending_ = false;
     uint64_t panelHandle_ = 0;      ///< vr::VROverlayHandle_t（性能パネル）
     uint64_t dashboardHandle_ = 0;  ///< ダッシュボードの設定パネル
     uint64_t thumbnailHandle_ = 0;  ///< ダッシュボードのサムネイル

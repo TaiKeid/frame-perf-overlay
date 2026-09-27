@@ -57,3 +57,14 @@ bool wristTrackingValid(uint32_t device, const vr::TrackedDevicePose_t (&poses)[
     return device < vr::k_unMaxTrackedDeviceCount && head.bDeviceIsConnected && head.bPoseIsValid &&
            poses[device].bDeviceIsConnected && poses[device].bPoseIsValid;
 }
+
+double WristFadeState::update(bool wrist, bool active, uint32_t device, double target, double now) {
+    const bool start = !active_ || device != device_ || lastTime_ < 0;
+    const double elapsed = start ? 0.0 : std::max(0.0, now - lastTime_);
+    lastTime_ = now;
+    device_ = device;
+    active_ = active;
+    if (!active || start) alpha_ = 0.0;
+    if (active) alpha_ = wrist ? smoothWristAlpha(alpha_, target, elapsed) : 1.0;
+    return alpha_;
+}

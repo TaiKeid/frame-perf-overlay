@@ -704,7 +704,7 @@ int runOverlay(const Options& options) {
         // 細かい周期（設定パネルが見えている間の 50ms）では設定パネルのイベントだけ見て、
         // それ以外の確認は 0.5 秒おきにする（見えていないときはループ自体が性能パネルの更新間隔で回る）
         const double loopStart = nowSeconds();
-        if (config.attachment != Attachment::Head) vr.updatePlacement(config, loopStart);
+        if (config.attachment != Attachment::Head || vr.needsPlacementRetry()) vr.updatePlacement(config, loopStart);
         const bool slowCheck = loopStart >= nextSlowCheck;
         if (slowCheck) {
             nextSlowCheck = loopStart + kSlowCheckSec;

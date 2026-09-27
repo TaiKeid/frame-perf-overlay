@@ -1,3 +1,9 @@
+## 0.1.0-tai.2 (local branch, 2026-09-27)
+
+- Retry rejected opacity/show/hide operations instead of caching them as successful; retries also run in head mode. Defer revealing a hidden panel until its opacity was accepted.
+- Start wrist fade timing from zero on attachment changes and after tracking or visibility returns, preventing an old head-mode interval from skipping the fade-in.
+- Add regression tests for transient/repeated API failures, wrist switching and reappearance after a long pause.
+
 ## 0.1.0-tai.1 (local branch, 2026-09-27)
 
 - Add local-time clock with Off / 12h / 24h controls.

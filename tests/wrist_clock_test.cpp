@@ -49,6 +49,69 @@ void geometry() {
     CHECK(smoothWristAlpha(1, 0, 0.2) < 0.1);
 }
 
+void placementRecovery() {
+    WristFadeState fade;
+    near(fade.update(false, true, 0, 1, 1), 1); // Head mode.
+    near(fade.update(true, true, 1, 1, 61), 0); // No 60-second jump on attachment change.
+    const double firstStep = fade.update(true, true, 1, 1, 61 + 1.0 / 60);
+    CHECK(firstStep > 0 && firstStep < 0.25);
+    near(fade.update(true, true, 2, 1, 100), 0); // Switch wrists after a pause.
+    CHECK(fade.update(true, true, 2, 1, 100.1) > 0);
+    near(fade.update(true, false, 2, 1, 101), 0); // Tracking lost / Show off.
+    near(fade.update(true, true, 2, 1, 150), 0); // Recovery fades from zero too.
+    CHECK(fade.update(true, true, 2, 1, 150.1) > 0);
+    near(fade.update(false, true, 0, 1, 151), 1); // Head stays immediate.
+
+    struct FakeOverlay {
+        double alpha = 0;
+        bool shown = false;
+        int failAlpha = 0, failShow = 0, failHide = 0;
+        int alphaCalls = 0, showCalls = 0, hideCalls = 0;
+        bool setAlpha(double value) {
+            ++alphaCalls;
+            if (failAlpha > 0) { --failAlpha; return false; }
+            alpha = value; return true;
+        }
+        bool setVisible(bool show) {
+            int& failures = show ? failShow : failHide;
+            if (show) ++showCalls; else ++hideCalls;
+            if (failures > 0) { --failures; return false; }
+            shown = show; return true;
+        }
+    } backend;
+    PanelPresentationState state;
+    auto apply = [&](double alpha) {
+        return state.apply(alpha, [&](double value) { return backend.setAlpha(value); },
+                           [&](bool show) { return backend.setVisible(show); });
+    };
+    backend.failShow = 1;
+    CHECK(apply(0.9)); CHECK(!backend.shown);
+    CHECK(!apply(0.9)); CHECK(backend.shown && backend.showCalls == 2);
+    for (int i = 0; i < 120; ++i) CHECK(!apply(0.9));
+    CHECK(backend.showCalls == 2 && backend.alphaCalls == 1); // No redundant successful writes.
+
+    backend.failHide = 1;
+    CHECK(apply(0)); CHECK(backend.shown); near(backend.alpha, 0);
+    CHECK(!apply(0)); CHECK(!backend.shown && backend.hideCalls == 2);
+
+    backend.failAlpha = 1;
+    CHECK(apply(0.9)); CHECK(!backend.shown); // Never show at stale alpha after a failed write.
+    CHECK(!apply(0.9)); CHECK(backend.shown); near(backend.alpha, 0.9);
+
+    backend.failAlpha = 1;
+    CHECK(apply(0)); CHECK(!backend.shown); // Still attempt hiding when alpha zero failed.
+    CHECK(!apply(0)); near(backend.alpha, 0);
+
+    backend.failShow = 100;
+    for (int i = 0; i < 100; ++i) CHECK(apply(0.9)); // Failure doesn't poison the cache.
+    CHECK(!backend.shown);
+    CHECK(!apply(0.9)); CHECK(backend.shown);
+    backend.failAlpha = 1;
+    CHECK(apply(0.4)); near(backend.alpha, 0.9);
+    CHECK(!apply(0.9)); // A changed target can match the last successfully applied value.
+    near(backend.alpha, 0.9);
+}
+
 void clockCases() {
     std::tm t{};
     CHECK(formatClock(t, 12) == "12:00 AM"); CHECK(formatClock(t, 24) == "00:00");
@@ -126,8 +189,8 @@ int main() {
     char directory[] = "/tmp/frame-overlay-test-XXXXXX";
     if (!mkdtemp(directory)) return 2;
     try {
-        geometry(); clockCases(); configuration(std::string(directory) + "/config.json"); controls(directory);
-        std::cout << "Geometry, clock, config persistence and UI controls passed.\n";
+        geometry(); placementRecovery(); clockCases(); configuration(std::string(directory) + "/config.json"); controls(directory);
+        std::cout << "Geometry, placement recovery, clock, config persistence and UI controls passed.\n";
         std::filesystem::remove_all(directory);
     } catch (const std::exception& error) {
         std::cerr << "FAIL: " << error.what() << " (artifacts: " << directory << ")\n"; return 1;

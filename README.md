@@ -124,7 +124,7 @@ cmake --build build -j2
 ctest --test-dir build --output-on-failure
 ```
 
-The custom binary reports `0.1.0-tai.1`. Automated checks cover transforms, facing/back-facing angles, fade smoothing, invalid/lost tracking, clock boundaries, saved settings, and settings button hit tests. Wrist comfort and controller orientation still need in-headset calibration. To render the wrist settings page without SteamVR, use `--dump-settings-png` with a config whose attachment is `left_wrist` or `right_wrist`.
+The custom binary reports `0.1.0-tai.2`. Automated checks cover transforms, facing/back-facing angles, fade smoothing, invalid/lost tracking, recovery from failed opacity/show/hide calls, attachment/reappearance fade timing, clock boundaries, saved settings, and settings button hit tests. Wrist comfort and controller orientation still need in-headset calibration. To render the wrist settings page without SteamVR, use `--dump-settings-png` with a config whose attachment is `left_wrist` or `right_wrist`.
 
 ## Settings file
 
