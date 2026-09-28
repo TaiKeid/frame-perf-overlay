@@ -67,7 +67,7 @@ public:
     const std::vector<uint8_t>& toRgba();
 
     /**
-     * 描いた画像を PNG で保存する。
+     * 描いた画像のうち、見えている部分（visibleHeight()）を PNG で保存する。
      * @param path 保存先
      * @return 保存できたら true
      */
@@ -75,16 +75,30 @@ public:
 
     /** @return 画像の幅（px） */
     int width() const;
-    /** @return 画像の高さ（px） */
+    /** @return 画像（テクスチャ）の高さ（px）。時計を出すときの高さで、いつも同じ */
     int height() const;
+    /** @return 最後に描いたときの、見えている部分の高さ（px）。時計を出さないときは時計の 1 行ぶん低い */
+    int visibleHeight() const { return visibleHeight_; }
+
+    /**
+     * 見えている部分の高さ。
+     * @param clock 時計を出すか
+     * @return px（時計ありで 460、なしで 434）
+     */
+    static int heightFor(bool clock);
 
 private:
     const FontSet& fonts_;
     cairo_surface_t* surface_ = nullptr;
     cairo_t* cr_ = nullptr;
-    cairo_surface_t* staticLayer_ = nullptr;  ///< 動かない部分（地・段のカード・グラフの台）
+    cairo_surface_t* staticLayers_[2] = {nullptr, nullptr};  ///< 動かない部分（地・段のカード・グラフの台）。[0] 時計なし、[1] 時計あり
     std::vector<uint8_t> rgba_;
+    int visibleHeight_ = 0;  ///< 最後に描いたときの、見えている部分の高さ（px）
 
-    /** 動かない部分を 1 回だけ描いておく。 */
-    void buildStaticLayer();
+    /**
+     * 動かない部分を描いた画像を作る（起動時に時計あり・なしの 2 枚）。
+     * @param clock 時計の行を含めるか
+     * @return 画像（呼ぶ側で破棄する）
+     */
+    cairo_surface_t* buildStaticLayer(bool clock) const;
 };

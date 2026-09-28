@@ -1,6 +1,7 @@
 // パネル描画の実装。数字 + 直近の折れ線グラフ + しきい値による色分け。
 #include "panel.h"
 
+#include "clock.h"
 #include "draw.h"
 #include "i18n.h"
 #include "theme.h"
@@ -22,9 +23,12 @@ constexpr int kLeftWidth = 188;               // 数字の列の幅
 constexpr int kGraphX = kPad + kLeftWidth + 8;
 constexpr int kGraphWidth = kWidth - kPad - kGraphX;
 constexpr int kTextLineHeight = 26;
-constexpr int kTextRows = 3;
+constexpr int kTextRows = 3;                  // 下の文字の段（CPU・無線・電池）。時計を出すときはもう 1 行
 constexpr int kTextTopGap = 18;               // 温度の段と、下の文字の段の間
-constexpr int kHeight = kPad + 3 * kRowHeight + 2 * kRowGap + kTextTopGap + kTextRows * kTextLineHeight + 12;
+// 時計を出さないときの高さ（434）と、時計の行を足した高さ（460）。テクスチャはいつも 460 で作り、
+// 時計を出さないときは上の 434 だけを使う（VrOverlay::setPanelVisibleHeight）
+constexpr int kHeightNoClock = kPad + 3 * kRowHeight + 2 * kRowGap + kTextTopGap + kTextRows * kTextLineHeight + 12;
+constexpr int kHeight = kHeightNoClock + kTextLineHeight;
 constexpr double kCardInsetX = 8;             // 段のカードの左右（パネルの端から）
 constexpr double kCardAbove = 6;              // 段のカードが中身より上に出る分
 constexpr double kCardBelow = 4;              // 段のカードが中身より下に出る分
@@ -609,10 +613,11 @@ void PanelState::update(double time, const SensorSample& sample, const FrameStat
     gpuBusyPct.push(time, sample.gpuBusyPct, keepSeconds);
 }
 
-PanelRenderer::PanelRenderer(const FontSet& fonts) : fonts_(fonts) {
+PanelRenderer::PanelRenderer(const FontSet& fonts) : fonts_(fonts), visibleHeight_(kHeight) {
     surface_ = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, kWidth, kHeight);
     cr_ = cairo_create(surface_);
-    buildStaticLayer();
+    staticLayers_[0] = buildStaticLayer(false);
+    staticLayers_[1] = buildStaticLayer(true);
     // VR では画素の並びが一定でないのでサブピクセルは使わない
     cairo_font_options_t* options = cairo_font_options_create();
     cairo_font_options_set_antialias(options, CAIRO_ANTIALIAS_GRAY);
@@ -624,17 +629,22 @@ PanelRenderer::PanelRenderer(const FontSet& fonts) : fonts_(fonts) {
 PanelRenderer::~PanelRenderer() {
     cairo_destroy(cr_);
     cairo_surface_destroy(surface_);
-    if (staticLayer_ != nullptr) cairo_surface_destroy(staticLayer_);
+    for (cairo_surface_t* layer : staticLayers_) {
+        if (layer != nullptr) cairo_surface_destroy(layer);
+    }
 }
 
-void PanelRenderer::buildStaticLayer() {
-    // 動かない部分（地・段のカード・グラフの台）は 1 回だけ描いて、毎回それを貼る（影つきのカードを毎回描かない）
-    staticLayer_ = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, kWidth, kHeight);
-    cairo_t* cr = cairo_create(staticLayer_);
+cairo_surface_t* PanelRenderer::buildStaticLayer(bool clock) const {
+    // 動かない部分（地・段のカード・グラフの台）は 1 回だけ描いて、毎回それを貼る（影つきのカードを毎回描かない）。
+    // 時計を出さないときは地と下のカードを 1 行ぶん短くし、その下は透明のまま
+    const int height = heightFor(clock);
+    const int textRows = kTextRows + (clock ? 1 : 0);
+    cairo_surface_t* layer = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, kWidth, kHeight);
+    cairo_t* cr = cairo_create(layer);
     const Pen pen {cr, &fonts_};
     // 地（不透明。コントラスト比は不透明な地で計算している。全体の透けは設定の alpha でオーバーレイごと変える）
     pen.color(kBg);
-    pen.roundedRect(0, 0, kWidth, kHeight, 16);
+    pen.roundedRect(0, 0, kWidth, height, 16);
     cairo_fill(cr);
     const double cardW = kWidth - 2 * kCardInsetX;
     for (int i = 0; i < 3; ++i) {
@@ -645,26 +655,29 @@ void PanelRenderer::buildStaticLayer() {
         pen.roundedRect(kGraphX, top + 4, kGraphWidth, kRowHeight - 8, 6);
         cairo_fill(cr);
     }
-    drawCard(pen, kCardInsetX, kTextTop - kCardAbove, cardW, kTextRows * kTextLineHeight + kCardAbove + kCardBelow, 12,
+    drawCard(pen, kCardInsetX, kTextTop - kCardAbove, cardW, textRows * kTextLineHeight + kCardAbove + kCardBelow, 12,
              kCard, kCard, 0);
     cairo_destroy(cr);
-    cairo_surface_flush(staticLayer_);
+    cairo_surface_flush(layer);
+    return layer;
 }
 
 void PanelRenderer::render(const PanelState& state, const Config& config) {
     const Pen pen {cr_, &fonts_};
+    const bool clock = config.clockFormat != 0;
+    visibleHeight_ = heightFor(clock);
 
-    // 先に描いておいた動かない部分をそのまま貼る（角の外は透明のまま）
+    // 先に描いておいた動かない部分をそのまま貼る（角の外と、時計を出さないときの下の 1 行ぶんは透明のまま）
     cairo_save(cr_);
     cairo_set_operator(cr_, CAIRO_OPERATOR_SOURCE);
-    cairo_set_source_surface(cr_, staticLayer_, 0, 0);
+    cairo_set_source_surface(cr_, staticLayers_[clock ? 1 : 0], 0, 0);
     cairo_paint(cr_);
     cairo_restore(cr_);
     if (state.sensors.throttleCpu || state.sensors.throttleGpu) {
         // 熱で制限がかかっている間は、パネル全体を赤い枠で囲んで目立たせる
         pen.color(kDanger);
         cairo_set_line_width(cr_, 4.0);
-        pen.roundedRect(2, 2, kWidth - 4, kHeight - 4, 15);
+        pen.roundedRect(2, 2, kWidth - 4, visibleHeight_ - 4, 15);
         cairo_stroke(cr_);
     }
 
@@ -675,6 +688,12 @@ void PanelRenderer::render(const PanelState& state, const Config& config) {
     top += kRowHeight + kRowGap;
     drawTempRow(pen, top, state, config);
     drawTextRows(pen, kTextTop, state, config);
+    // 4 行目: 時計（本体の時刻。更新間隔ごとに描き直す）
+    if (clock) {
+        const double y = kTextTop + kTextRows * kTextLineHeight + 19;
+        pen.text(kPad, y, uiText(config.language).clockLabel, 16, kTextMuted);
+        pen.text(kWidth - kPad, y, localClock(config.clockFormat), 21, kText, true, true);
+    }
 
     cairo_surface_flush(surface_);
 }
@@ -685,7 +704,11 @@ const std::vector<uint8_t>& PanelRenderer::toRgba() {
 }
 
 bool PanelRenderer::writePng(const std::string& path) const {
-    return cairo_surface_write_to_png(surface_, path.c_str()) == CAIRO_STATUS_SUCCESS;
+    // 見えている部分（時計を出さないときは上の 434）だけを書き出す
+    cairo_surface_t* visible = cairo_surface_create_for_rectangle(surface_, 0, 0, kWidth, visibleHeight_);
+    const bool ok = cairo_surface_write_to_png(visible, path.c_str()) == CAIRO_STATUS_SUCCESS;
+    cairo_surface_destroy(visible);
+    return ok;
 }
 
 int PanelRenderer::width() const {
@@ -694,4 +717,8 @@ int PanelRenderer::width() const {
 
 int PanelRenderer::height() const {
     return kHeight;
+}
+
+int PanelRenderer::heightFor(bool clock) {
+    return clock ? kHeight : kHeightNoClock;
 }

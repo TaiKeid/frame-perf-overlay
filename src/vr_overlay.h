@@ -1,11 +1,13 @@
-// OpenVR との接続、HMD 基準の性能パネル、ダッシュボードの設定パネル、フレーム時間の取得。
+// OpenVR との接続、頭か手首（コントローラー）に固定する性能パネル、ダッシュボードの設定パネル、フレーム時間の取得。
 #pragma once
 
 #include "config.h"
 #include "history.h"
+#include "placement.h"
 #include "vk_texture.h"
 
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -86,10 +88,37 @@ public:
     void shutdown();
 
     /**
-     * 位置・向き・幅・透明度・表示の有無を性能パネルに反映する。
+     * 固定先・位置・向き・幅・透明度・表示の有無を性能パネルに反映する。
      * @param config 反映する設定
      */
     void applyConfig(const Config& config);
+
+    /**
+     * 性能パネルの置き場所と見え方を反映する（性能パネルの描画とは別の周期で呼ぶ）。
+     * 手首のときはコントローラーと頭の姿勢を読んで、面が目から外れる角度に合わせて薄くし、トラッキングが外れたらすぐ隠す。
+     * 変わったところだけ OpenVR に渡し、断られた操作は次の呼び出しでやり直す。次に呼ぶ時刻は nextPlacementAt() で分かる。
+     * @param config 今の設定
+     * @param now 今の時刻（秒、単調増加）
+     */
+    void updatePlacement(const Config& config, double now);
+
+    /**
+     * 性能パネルのテクスチャのうち、上から何 px を見せるか（時計を出さないときは下の 1 行ぶんを使わない）。
+     * SetOverlayTextureBounds で上の部分だけを使うので、テクスチャは作り直さず、幅（m）はそのままで高さが縮む。
+     * 変わったときだけ OpenVR に渡し、断られたら次の呼び出しでやり直す。
+     * @param visibleHeight 見せる高さ（px。connect で渡したテクスチャの高さまで）
+     */
+    void setPanelVisibleHeight(int visibleHeight);
+
+    /** @return 今 OpenVR に渡してある、性能パネルの見せる高さ（px） */
+    int panelVisibleHeight() const { return panelVisibleHeight_; }
+
+    /**
+     * 次に updatePlacement() を呼ぶ時刻。手首のときはフェードの途中なら 1/30 秒後、見えきっている・消えきっているなら
+     * 0.1 秒後。頭のときや隠しているときは、やり直しが要るときだけ（それ以外は無限大）。
+     * @return 時刻（秒、単調増加）
+     */
+    double nextPlacementAt() const { return nextPlacementAt_; }
 
     /**
      * --verbose のとき true にする。applyConfig のたびに、少し後の pollEvents で
@@ -171,6 +200,16 @@ public:
 
 private:
     bool connected_ = false;
+    uint32_t attachedDevice_ = 0xffffffff;  ///< 変換を渡してある機器（0xffffffff = vr::k_unTrackedDeviceIndexInvalid = まだ）
+    bool transformDirty_ = true;            ///< 変換を渡し直す必要がある（設定が変わった・前回断られた）
+    WristFadeState wristFade_;              ///< 手首のときの見せる割合（フェード）
+    PanelPresentationState presentation_;   ///< OpenVR に反映できた透明度と表示・非表示
+    double nextPlacementAt_ = std::numeric_limits<double>::infinity();  ///< 次に updatePlacement を呼ぶ時刻
+    uint32_t wristDevice_ = 0xffffffff;     ///< 手首に固定しているコントローラーの番号（覚えておいて、ときどき聞き直す）
+    bool wristDeviceLeft_ = true;           ///< wristDevice_ が左手の番号か
+    double wristDeviceCheckedAt_ = -1.0;    ///< wristDevice_ を聞いた時刻（まだなら負）
+    int panelTextureHeight_ = 0;    ///< 性能パネルのテクスチャの高さ（px）
+    int panelVisibleHeight_ = 0;    ///< OpenVR に渡してある見せる高さ（px。テクスチャの高さなら全部）
     uint64_t panelHandle_ = 0;      ///< vr::VROverlayHandle_t（性能パネル）
     uint64_t dashboardHandle_ = 0;  ///< ダッシュボードの設定パネル
     uint64_t thumbnailHandle_ = 0;  ///< ダッシュボードのサムネイル
@@ -192,6 +231,15 @@ private:
     OverlayTexture panelTexture_;
     OverlayTexture settingsTexture_;
     OverlayTexture thumbnailTexture_;
+
+    /**
+     * 手首に固定するコントローラーの番号を返す（役割から引いた番号を覚えておき、手を替えたときと 1 秒ごとだけ
+     * OpenVR に聞き直す）。
+     * @param left 左手なら true
+     * @param now 今の時刻（秒、単調増加）
+     * @return 番号（見つからなければ vr::k_unTrackedDeviceIndexInvalid）
+     */
+    uint32_t wristDeviceIndex(bool left, double now);
 
     /**
      * ダッシュボードの設定パネルとサムネイルを作る。失敗しても性能パネルは動かす。

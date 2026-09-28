@@ -49,6 +49,7 @@ constexpr double kSettingsActiveHoldSec = 3.0;  ///< 最後のマウスのイベ
 constexpr double kSlowCheckSec = 0.5;       ///< SteamVR のイベント・設定ファイル・見えているかなどを確かめる最短の間隔
 constexpr double kControllerIntervalSec = 10.0;  ///< コントローラーの電池を読む間隔
 constexpr double kAutostartRefreshSec = 3.0;     ///< 設定パネルが見えている間に自動起動の状態を読み直す間隔
+constexpr double kPlacementCoalesceSec = 0.02;   ///< 性能パネルの置き場所を確かめる予定がこの秒数以内なら、ついでに済ませる
 
 /** コマンドラインの内容。 */
 struct Options {
@@ -545,7 +546,7 @@ int runDumpPng(const Options& options) {
         std::fprintf(stderr, "PNG を書き出せませんでした: %s\n", options.pngPath.c_str());
         return 1;
     }
-    std::printf("PNG を書き出しました: %s（%dx%d）\n", options.pngPath.c_str(), renderer.width(), renderer.height());
+    std::printf("PNG を書き出しました: %s（%dx%d）\n", options.pngPath.c_str(), renderer.width(), renderer.visibleHeight());
     return 0;
 }
 
@@ -789,12 +790,17 @@ int runOverlay(const Options& options) {
     double nextSlowCheck = 0.0;
     double lastPointerEvent = -1e9;  // 最後にマウスのイベントが来た時刻（操作中は細かく確かめる）
     bool userQuit = false;
+    bool panelDrawnWithClock = true;  // 最後に描いた性能パネルが時計の行つきか（テクスチャは時計つきの高さで作る）
     unsigned loopCount = 0;  // --verbose 用: 前回の表示からループが回った回数
     while (!gStopRequested && !userQuit) {
         ++loopCount;
         // 細かい周期（設定パネルが見えている間の 50ms）では設定パネルのイベントだけ見て、
         // それ以外の確認は 0.5 秒おきにする（見えていないときはループ自体が性能パネルの更新間隔で回る）
         const double loopStart = nowSeconds();
+        // 性能パネルの置き場所と見え方（手首のときのフェード・トラッキングが外れたら隠す、断られた操作のやり直し）。
+        // 手首のときはフェードの途中だけ 1/30 秒おき、見えきっている・消えきっているときは 0.1 秒おき。
+        // 予定が近ければ、別の用事（性能パネルの更新・設定パネルのマウス）で起きたついでに済ませて、起きる回数を減らす
+        if (loopStart >= vr.nextPlacementAt() - kPlacementCoalesceSec) vr.updatePlacement(config, loopStart);
         const bool slowCheck = loopStart >= nextSlowCheck;
         if (slowCheck) {
             nextSlowCheck = loopStart + kSlowCheckSec;
@@ -811,7 +817,8 @@ int runOverlay(const Options& options) {
                 settingsDirty = true;
             }
         }
-        const VrEvents events = vr.pollEvents(slowCheck);
+        // イベントは 0.5 秒おきと、設定パネルが見えている間だけ見る（手首のフェードのためだけに起きたときは IPC を増やさない）
+        const VrEvents events = slowCheck || settingsVisible ? vr.pollEvents(slowCheck) : VrEvents {};
         // SteamVR 自体の終了（VREvent_Quit）は今までどおり終了コード 0。
         // ダッシュボードのアイコンの「閉じる」（VREvent_OverlayClosed）はユーザーの終了なので、設定パネルの
         // 「アプリを終了」と同じく終了コード 3（systemd でも起動し直さない）
@@ -894,8 +901,9 @@ int runOverlay(const Options& options) {
         }
         settingsWasVisible = settingsVisible;
 
-        // 性能パネル（更新間隔ごと）
+        // 性能パネル（更新間隔ごと。時計を出す・出さないが変わったら、高さが変わるのですぐ描き直す）
         double now = nowSeconds();
+        if (config.visible && (config.clockFormat != 0) != panelDrawnWithClock) nextPanel = now;
         if (now >= nextPanel) {
             if (config.visible) {
                 // 処理ごとの CPU 時間（--verbose で表示）
@@ -914,7 +922,13 @@ int runOverlay(const Options& options) {
                 const double c3 = cpuSeconds();
                 const std::vector<uint8_t>& rgba = renderer.toRgba();
                 const double c4 = cpuSeconds();
+                // 見せる高さ（時計の行の有無）が変わるとき: 広がるときは先に広げ、狭まるときは新しい画像を送ってから
+                // 狭める。どちらも切り替えの間に見えるのは透明な 1 行ぶんだけで、描いた中身が切れて見えることはない
+                const int visibleHeight = renderer.visibleHeight();
+                vr.setPanelVisibleHeight(std::max(visibleHeight, vr.panelVisibleHeight()));
                 const bool sent = vr.submitPanel(rgba.data());
+                vr.setPanelVisibleHeight(visibleHeight);
+                panelDrawnWithClock = config.clockFormat != 0;
                 const double c5 = cpuSeconds();
                 if (options.verbose && now - lastVerbose >= 2.0) {
                     lastVerbose = now;
@@ -946,12 +960,14 @@ int runOverlay(const Options& options) {
             if (nextPanel < now) nextPanel = now;
         }
 
-        // 待つ: 設定パネルが見えている間はマウスに素早く応えるため 50ms、それ以外は次の性能パネルの更新まで
+        // 待つ: 設定パネルが見えている間はマウスに素早く応えるため 50ms、それ以外は次の性能パネルの更新まで。
+        // 手首に固定しているときは、次に置き場所と見え方を確かめる時刻までに起きる
         now = nowSeconds();
         const double wait = nextPanel - now;
         // 見えているだけのときは 100ms、ポインターが動いている間（最後のイベントから 3 秒）は 50ms
         const double pollSec = now - lastPointerEvent < kSettingsActiveHoldSec ? kSettingsPollSec : kSettingsIdlePollSec;
-        sleepInterruptible(settingsVisible ? std::fmin(wait, pollSec) : wait);
+        const double placementWait = vr.nextPlacementAt() - now;  // 確かめる予定がなければ無限大
+        sleepInterruptible(std::fmin(placementWait, settingsVisible ? std::fmin(wait, pollSec) : wait));
     }
 
     // SIGTERM / SIGINT・SteamVR の終了・vrserver の消滅・「アプリを終了」のどれでも同じ終了処理を通す

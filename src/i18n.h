@@ -119,6 +119,20 @@ struct UiText {
     const char* updateRetry;             ///< `InstallFailed` のやり直しボタン
     const char* updateDismiss;           ///< `Installed` / `InstallFailed` を閉じる
     const char* updateLogHint;           ///< 失敗したときの補足（ログの場所）
+    // ---- 固定先・手首・時計 ----
+    const char* rowAttachment;    ///< 位置のカードの「固定先」
+    const char* attachHead;       ///< 固定先: 頭
+    const char* attachLeft;       ///< 固定先: 左手（のコントローラー）
+    const char* attachRight;      ///< 固定先: 右手（のコントローラー）
+    const char* wristPreset;      ///< 手首のときの位置のボタン（手首の標準の位置と向きに戻す）
+    const char* wristOffsetFormat;  ///< 手首のときの、いまの位置（%.0f は標準の位置からの距離、cm）
+    const char* rowWristFade;     ///< 傾けると消す
+    const char* rowFadeAngle;     ///< 消える角度
+    const char* fadeRangeFormat;  ///< 消える角度の値（%.0f が 2 つ: 薄くなり始める角度、消えきる角度）
+    const char* rowClock;         ///< 時計
+    const char* clock12;          ///< 12 時間制のボタン
+    const char* clock24;          ///< 24 時間制のボタン
+    const char* clockLabel;       ///< 性能パネルの時計の見出し
 };
 
 /**

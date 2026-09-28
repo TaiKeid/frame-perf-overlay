@@ -10,7 +10,7 @@ Recorded inside the headset while playing Half-Life: Alyx (no sound). The panel 
 
 ![The performance panel](docs/images/panel-en.png)
 
-The panel follows your head and sits in the lower left of your view by default. Position, facing, size, opacity and language (English / Japanese) can be changed from the SteamVR dashboard.
+The panel follows your head and sits in the lower left of your view by default. It can also be worn on your left or right controller like a wristwatch, and it shows the time on its bottom line. Where it's attached, position, facing, size, opacity, clock and language (English / Japanese) can be changed from the SteamVR dashboard.
 
 ![The settings tab in the SteamVR dashboard](docs/images/settings-en.png)
 
@@ -26,6 +26,7 @@ These images were written out by the app itself (`--dump-png` / `--dump-settings
 | Bottom line 1 | CPU usage (overall and busiest core), fastest cluster clock, GPU clock | | |
 | Bottom line 2 | Wireless. **Link** when a PC is on the Steam Link direct wireless link; otherwise **Wi-Fi** for the access point the headset is joined to (e.g. your home Wi-Fi). Signal strength (Wi-Fi icon and dBm), data actually flowing (↓ into the headset, ↑ out of it, Mbps) and link rates. A grey crossed-out icon means neither is connected | | |
 | Bottom line 3 | Headset battery, left and right controller batteries (a bolt while charging), memory | | |
+| Bottom line 4 | The time on the headset's clock (24-hour by default; 12-hour or off in the settings) | | |
 
 Numbers over a threshold turn yellow, and red past a second threshold. The thresholds can be changed in the settings file.
 
@@ -78,20 +79,26 @@ Options:
   | Show: On / Off | Show or hide the panel. While hidden, nothing is read or drawn |
   | Size − / + | Panel width in 2 cm steps (6 cm to 1 m) |
   | Opacity − / + | In 10 % steps (20 % to 100 %) |
-  | Reset | Put show, position, facing, size and opacity back to the defaults |
-  | Top L / Top R / Bottom L / Bottom C / Bottom R | Move the panel to that corner of your view and turn it to face you |
-  | ← Left / Right → / ↑ Up / ↓ Down | Nudge the panel by 2 cm. The facing stays as it is |
-  | Closer / Farther | Move it 5 cm nearer or further (20 cm to 3 m), keeping the direction |
-  | Facing: ← Left / Right → / ↑ Up / ↓ Down | Turn the panel's face by the chosen step (left/right up to ±180°, up/down up to ±90°). It snaps to the step: at 16.7°, By 5° goes to 20° or 15° |
+  | Clock: Off / 12h / 24h | The clock on the panel's bottom line: the headset's time, 24-hour by default, 12-hour with AM / PM, or hidden |
+  | Reset | Put show, attachment, position and facing (head and both hands), tilt fade, clock, size and opacity back to the defaults. Language and thresholds stay |
+  | Attach to: Head / L hand / R hand | Where the panel sits: in front of your eyes, following your head, or on the left / right controller like a wristwatch. The position and facing buttons below always move the one you picked, and each hand keeps its own position and facing |
+  | Top L / Top R / Bottom L / Bottom C / Bottom R (head) | Move the panel to that corner of your view and turn it to face you |
+  | Default wrist position (hand) | Put that hand's panel back to its standard place and facing (`x` 0, `y` 0.05, `z` 0.08, `pitch` −90 in the settings file) |
+  | ← Left / Right → / ↑ Up / ↓ Down | Head: nudge the panel by 2 cm. Hand: move it by 1 cm along the panel itself, as it is turned now: toward its right / left edge or its top / bottom edge (up to ±50 cm). The facing stays as it is |
+  | Closer / Farther | Head: move it 5 cm nearer or further (20 cm to 3 m), keeping the direction. Hand: move it 1 cm out of its face (toward you when you look at it) or back into it (up to ±50 cm) |
+  | Facing: ← Left / Right → / ↑ Up / ↓ Down | Turn the panel's face by the chosen step, the same way on your head and on your hand: ↑ Up tilts the face toward the top of the panel, Right → toward its right (left/right up to ±180°, up/down up to ±90° from face-ahead on the head, or from lying flat on the hand). It snaps to the step: at 16.7°, By 5° goes to 20° or 15° |
   | ⟲ Rotate L / Rotate R ⟳ | Spin the panel in its own plane (roll) by the chosen step, counterclockwise / clockwise as you look at it (up to ±180°). Use it if the panel doesn't look level to you |
   | By 1° / By 5° | How far one press of the facing arrows and the rotate buttons turns the panel. Starts at 1° each time the app starts (not saved) |
-  | Face me | Keep the position and turn the panel so it faces your head. The rotation from Rotate L / R (roll) is kept |
-  | Face ahead | Remove the rotation, so the panel is parallel to your face again (the look before this feature) |
+  | Face me (head) | Keep the position and turn the panel so it faces your head. The rotation from Rotate L / R (roll) is kept |
+  | Face ahead (head) | Remove the rotation, so the panel is parallel to your face again (the look before this feature) |
+  | Fade on tilt: On / Off (hand) | On fades the panel out as its face turns away from your eyes, so it shows only when you look at it like a watch. Off keeps it shown at any angle |
+  | Fade angle − / + (hand) | In 5° steps: the angle between the panel's face and the direction to your eyes at which it's gone (35° to 90°). It starts fading 30° before that; the default is 45–75° |
   | Language | English or Japanese, applied immediately |
   | Autostart: On / Off | Turn the systemd service on or off. Takes effect from the next SteamVR start |
   | Quit app | Click twice within 3 seconds to quit |
 
   Changes apply immediately and are saved to the settings file.
+- **On your hand**: the panel follows the controller (SteamVR's tracking of the controller, not hand tracking). If the controller or the headset loses tracking, the panel hides at once and fades back in when tracking returns. The **Perf** tab still works while the panel is hidden. The best position and facing depend on how you hold the controller, so adjust them with the headset on.
 - **Updates**: a bar in the title row, right of the title, always shows the running version, e.g. `Up to date (0.2.0)` (with the automatic check turned off, just the version until you check), with a **Check now** button that asks GitHub right away (it works even with the automatic check turned off). What the bar shows:
   - **New version**: a pink border, `Version 0.2.1 is available`, **Check now** and **Update**. **Update** asks `Update to 0.2.1?` with **Cancel** / **Update**; the second **Update** starts the install.
   - **Updating**: the step (`Updating: Downloading`, …) and, on the right, a small grey note that the panel may close and reopen meanwhile. It does, once, when the new version starts.
@@ -112,9 +119,15 @@ A file with every key at its default value is in [`contrib/config.example.json`]
 | `visible` | `true` | `false` hides the panel (and stops reading and drawing) |
 | `update_check` | `true` | `false` turns off the automatic checks for a new release (at start and daily). The **Check now** button in the Perf tab still works either way |
 | `language` | your Steam language | `"en"` (English) or `"ja"` (Japanese) |
+| `attachment` | `"head"` | Where the panel is attached: `"head"`, `"left_wrist"` or `"right_wrist"` (the left / right controller) |
 | `position.x` / `.y` / `.z` | `-0.15` / `-0.12` / `-0.5` | Panel center relative to your head, in meters. +x is right, +y is up, −z is forward |
 | `rotation.yaw` / `.pitch` / `.roll` | `0` / `0` / `0` | Panel rotation in degrees. `yaw` turns the face left/right (positive = toward +x, −180 to 180), `pitch` tilts it up/down (positive = up, −90 to 90), `roll` spins it in its own plane (positive = counterclockwise as you look at it, −180 to 180). Applied in the order yaw → pitch → roll. All 0 keeps the panel parallel to your face. "Face me" and the corner buttons set yaw and pitch and keep roll as it is |
-| `width_m` | `0.2` | Panel width in meters. The height follows from the aspect ratio (512 × 434) |
+| `left_wrist.x` / `.y` / `.z`, `right_wrist.x` / `.y` / `.z` | `0` / `0.05` / `0.08` | Panel center in that hand's controller coordinates as SteamVR reports them, in meters (−0.5 to 0.5). The dashboard's nudge buttons move the panel along its own axes (right, up, and out of its face, after its rotation) and save the result in these coordinates. The left and right controllers use the same axes |
+| `left_wrist.yaw` / `.pitch` / `.roll`, `right_wrist.yaw` / `.pitch` / `.roll` | `0` / `-90` / `0` | Panel rotation on that hand, in degrees, with the same meaning and order as `rotation`, counted from the standard facing, lying on the controller, which is `pitch` −90. `pitch` −180 to 0 (up to 90° either way from lying), `yaw` and `roll` −180 to 180 |
+| `wrist_fade` | `true` | On a hand, fade the panel out as its face turns away from your eyes. `false` keeps it shown at any angle |
+| `wrist_fade_end_deg` | `75` | Angle (degrees, 35 to 90) between the panel's face and the direction to your eyes at which the panel on a hand is gone. It starts fading 30° earlier |
+| `clock_format` | `24` | The clock on the panel's bottom line: `24` (24-hour), `12` (12-hour with AM / PM) or `0` (hidden) |
+| `width_m` | `0.2` | Panel width in meters. The height follows from the aspect ratio: 512 × 460 with the clock, 512 × 434 with the clock off |
 | `alpha` | `0.9` | Opacity of the whole panel (0 to 1) |
 | `update_interval_ms` | `500` | Update interval (100 to 5000 ms) |
 | `graph_seconds` | `30` | Seconds shown in the graphs (5 to 300) |
@@ -176,6 +189,7 @@ Some values were checked against another source on a Steam Frame; others are est
 - **CPU usage and clocks, GPU clock, memory, headset battery**: match `top` and the raw values in `/proc` and `/sys`.
 - **CPU, GPU and battery temperatures**: within 1 to 2 °C of the raw sensor values.
 - **Fan speed**: the raw tachometer value divided by 2, the same conversion SteamOS's own fan control uses.
+- **Clock**: the headset's own clock and time zone, redrawn with every panel update (every 0.5 seconds by default).
 
 **Estimates**
 
@@ -195,6 +209,7 @@ Some values were checked against another source on a Steam Frame; others are est
 - The dashboard's close button says "Close", not "Quit", because the app isn't a Steam app.
 - Command-line output (`--print`, `--help`) and the logs are in Japanese only.
 - There is no controller button binding. Use the dashboard or the settings file.
+- On a hand, the panel follows the controller, not your tracked hand. When the fade is on, the app checks the angle 30 times a second while the panel is fading and 10 times a second otherwise, so losing tracking hides it within about 0.1 seconds.
 
 ## Privacy
 
@@ -222,6 +237,7 @@ Build on the headset (the program links against SteamOS's cairo, FreeType, libnl
 ```sh
 cmake -G Ninja -S . -B build
 cmake --build build
+ctest --test-dir build --output-on-failure  # tests (wrist geometry, fade, clock, settings file, settings buttons)
 ./install.sh               # installs build/frame-perf-overlay
 scripts/package.sh         # release build: dist/frame-perf-overlay-<version>.tar.gz, dist/SHA256SUMS
 ```
@@ -232,6 +248,7 @@ Useful options (all of them work without SteamVR, except the last one):
 ./build/frame-perf-overlay --print --count 5        # print the readings once a second, 5 times
 ./build/frame-perf-overlay --dump-png panel.png --seconds 30 --fake-frames --language en
 ./build/frame-perf-overlay --dump-settings-png settings.png --language en
+./build/frame-perf-overlay --dump-settings-png wrist.png --config wrist.json --language en  # wrist.json: {"attachment": "left_wrist"}
 ./build/frame-perf-overlay --dump-settings-png update.png --preview-update available --language en
 ./build/frame-perf-overlay --contrast-report        # WCAG contrast of every color pair used
 ./build/frame-perf-overlay --verbose                # run as the overlay and log the values every few seconds
