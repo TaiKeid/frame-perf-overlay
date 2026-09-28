@@ -80,7 +80,7 @@ Options:
   | Size − / + | Panel width in 2 cm steps (6 cm to 1 m) |
   | Opacity − / + | In 10 % steps (20 % to 100 %) |
   | Clock: Off / 12h / 24h | The clock on the panel's bottom line: the headset's time, 24-hour by default, 12-hour with AM / PM, or hidden |
-  | Reset | Put show, attachment, position and facing (head and both hands), tilt fade, clock, size and opacity back to the defaults. Language and thresholds stay |
+  | Reset | Put show, attachment, position and facing (head and both hands), tilt fade, clock, size and opacity back to the defaults. Language, thresholds, fonts and the update check setting stay |
   | Attach to: Head / L hand / R hand | Where the panel sits: in front of your eyes, following your head, or on the left / right controller like a wristwatch. The position and facing buttons below always move the one you picked, and each hand keeps its own position and facing |
   | Top L / Top R / Bottom L / Bottom C / Bottom R (head) | Move the panel to that corner of your view and turn it to face you |
   | Default wrist position (hand) | Put that hand's panel back to its standard place and facing (`x` 0, `y` 0.05, `z` 0.08, `pitch` −90 in the settings file) |
@@ -91,8 +91,8 @@ Options:
   | By 1° / By 5° | How far one press of the facing arrows and the rotate buttons turns the panel. Starts at 1° each time the app starts (not saved) |
   | Face me (head) | Keep the position and turn the panel so it faces your head. The rotation from Rotate L / R (roll) is kept |
   | Face ahead (head) | Remove the rotation, so the panel is parallel to your face again (the look before this feature) |
-  | Fade on tilt: On / Off (hand) | On fades the panel out as its face turns away from your eyes, so it shows only when you look at it like a watch. Off keeps it shown at any angle |
-  | Fade angle − / + (hand) | In 5° steps: the angle between the panel's face and the direction to your eyes at which it's gone (35° to 90°). It starts fading 30° before that; the default is 45–75° |
+  | Fade on tilt: On / Off (hand) | On fades the panel out as its face turns away from your head (the headset), so it shows only when you look at it like a watch. Off keeps it shown at any angle |
+  | Fade angle − / + (hand) | In 5° steps: the angle between the panel's face and the direction to your head (the headset) at which it's gone (35° to 90°). It starts fading 30° before that; the default is 45–75° |
   | Language | English or Japanese, applied immediately |
   | Autostart: On / Off | Turn the systemd service on or off. Takes effect from the next SteamVR start |
   | Quit app | Click twice within 3 seconds to quit |
@@ -124,8 +124,8 @@ A file with every key at its default value is in [`contrib/config.example.json`]
 | `rotation.yaw` / `.pitch` / `.roll` | `0` / `0` / `0` | Panel rotation in degrees. `yaw` turns the face left/right (positive = toward +x, −180 to 180), `pitch` tilts it up/down (positive = up, −90 to 90), `roll` spins it in its own plane (positive = counterclockwise as you look at it, −180 to 180). Applied in the order yaw → pitch → roll. All 0 keeps the panel parallel to your face. "Face me" and the corner buttons set yaw and pitch and keep roll as it is |
 | `left_wrist.x` / `.y` / `.z`, `right_wrist.x` / `.y` / `.z` | `0` / `0.05` / `0.08` | Panel center in that hand's controller coordinates as SteamVR reports them, in meters (−0.5 to 0.5). The dashboard's nudge buttons move the panel along its own axes (right, up, and out of its face, after its rotation) and save the result in these coordinates. The left and right controllers use the same axes |
 | `left_wrist.yaw` / `.pitch` / `.roll`, `right_wrist.yaw` / `.pitch` / `.roll` | `0` / `-90` / `0` | Panel rotation on that hand, in degrees, with the same meaning and order as `rotation`, counted from the standard facing, lying on the controller, which is `pitch` −90. `pitch` −180 to 0 (up to 90° either way from lying), `yaw` and `roll` −180 to 180 |
-| `wrist_fade` | `true` | On a hand, fade the panel out as its face turns away from your eyes. `false` keeps it shown at any angle |
-| `wrist_fade_end_deg` | `75` | Angle (degrees, 35 to 90) between the panel's face and the direction to your eyes at which the panel on a hand is gone. It starts fading 30° earlier |
+| `wrist_fade` | `true` | On a hand, fade the panel out as its face turns away from your head (the headset). `false` keeps it shown at any angle |
+| `wrist_fade_end_deg` | `75` | Angle (degrees, 35 to 90) between the panel's face and the direction to your head (the headset) at which the panel on a hand is gone. It starts fading 30° earlier |
 | `clock_format` | `24` | The clock on the panel's bottom line: `24` (24-hour), `12` (12-hour with AM / PM) or `0` (hidden) |
 | `width_m` | `0.2` | Panel width in meters. The height follows from the aspect ratio: 512 × 460 with the clock, 512 × 434 with the clock off |
 | `alpha` | `0.9` | Opacity of the whole panel (0 to 1) |
@@ -216,13 +216,14 @@ Some values were checked against another source on a Steam Frame; others are est
 - The app itself has no telemetry. The **only** outside network access is the update check: it asks `api.github.com` for the latest release (while `update_check` is on: at start and then at most once every 24 hours — an hour after a failed check — or right away when you press **Check now**), and, only after you confirm an install, downloads the release's tar.gz and `SHA256SUMS` from `github.com` / `*.githubusercontent.com` over HTTPS. Nothing else is sent; GitHub sees the usual anonymous HTTP request (your headset's IP, `curl`'s user agent). (For the Wi-Fi status shown in the panel it only asks the headset's own kernel — that never leaves the headset.)
 - For the Steam Link direct link, and for the Wi-Fi access point the headset is joined to, it reads only the signal strength, link rates and byte counters, from the headset's own Wi-Fi driver. It doesn't extract, show or log any MAC address (PC, access point or headset) or the network name (SSID) of your Wi-Fi.
 - Files it writes: its own settings file (a temporary `config.json.tmp` next to it, renamed into place); a small lock file in `/run/user/<uid>` (memory only; `/tmp` if that folder doesn't exist) holding the app's process ID; and, only when checking or installing updates, the update helper's own cache files under `~/.cache/frame-perf-overlay/` (the last check's answer, install progress/log, a lock folder while it runs, and a working folder `update/` for the downloaded tar.gz and its extracted files, which is emptied when the install ends; a copy of the helper script stays there — see [Updates](#updates)).
+- When the panel is on a hand, it reads the position and orientation of that controller and of the headset from SteamVR to place and fade the panel. It uses them only in memory; they aren't saved, logged or sent anywhere.
 - Logs stay on the headset in the systemd journal.
 
 ## Disclaimer
 
 - This is an unofficial project. It is not affiliated with, endorsed by, or sponsored by Valve Corporation. Steam, Steam Frame, SteamVR and Steam Link are trademarks and/or registered trademarks of Valve Corporation in the U.S. and/or other countries. The names are used here only to say what this works with.
 - Use at your own risk. The software comes with no warranty (see [LICENSE](LICENSE)). **The author is not responsible for any damage from using it, including damage to your headset or your Steam account.**
-- It was made with an AI assistant (Claude) and tested on the author's own Steam Frame. It may not behave the same on yours.
+- It was made by the author with an AI assistant (Claude), includes code contributed by others (see [CHANGELOG.md](CHANGELOG.md)), and was tested on the author's own Steam Frame. It may not behave the same on yours.
 - What it does on your headset:
   - It only **reads** from sysfs and `/proc` (sensors, CPU, memory, and the GPU time the kernel reports for your own processes). It never writes there, and it doesn't touch fans, clocks, power settings or cameras. To pick the default language it also reads the `language` line of Steam's `~/.steam/registry.vdf` once at startup (read only).
   - It writes only: its own settings file; the files `install.sh` puts under `~/.local`, the service file under `~/.config/systemd/user` and `~/.config/frame-perf-overlay/install-args`; the update helper's cache files under `~/.cache/frame-perf-overlay/` (see [Privacy](#privacy)); when you use the **Autostart** switch, `systemctl --user enable` / `disable` for its own service; and, when you confirm an update, a temporary systemd user unit (`frame-perf-overlay-update`, started with `systemd-run --user`) that runs the new release's `install.sh`.
@@ -271,3 +272,7 @@ gh release create v<version> dist/frame-perf-overlay-<version>.tar.gz dist/SHA25
 ## License
 
 MIT. See [LICENSE](LICENSE). `vendor/frame-updater/` is a copy of the author's own update code and is under the same MIT License. The bundled `openvr.h` is under the BSD-3-Clause license, and the system libraries and font used at run time are listed in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md) (in Japanese).
+
+## Credits
+
+- Wrist attachment, the clock and the tilt fade were contributed by [TaiKeid](https://github.com/TaiKeid) in [#1](https://github.com/sasaken1102r/frame-perf-overlay/pull/1).
