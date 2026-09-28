@@ -83,9 +83,9 @@ Options:
   | Reset | Put show, attachment, position and facing (head and both hands), tilt fade, clock, size and opacity back to the defaults. Language and thresholds stay |
   | Attach to: Head / L hand / R hand | Where the panel sits: in front of your eyes, following your head, or on the left / right controller like a wristwatch. The position and facing buttons below always move the one you picked, and each hand keeps its own position and facing |
   | Top L / Top R / Bottom L / Bottom C / Bottom R (head) | Move the panel to that corner of your view and turn it to face you |
-  | Default wrist position (hand) | Put that hand's panel back to its standard place: lying flat on top of the controller, 5 cm above it and 8 cm toward your wrist |
-  | ← Left / Right → / ↑ Up / ↓ Down | Head: nudge the panel by 2 cm. Hand: move it by 1 cm to the controller's right / left / up / down (up to ±50 cm). The facing stays as it is |
-  | Closer / Farther (head), Toward wrist / Toward tip (hand) | Head: move it 5 cm nearer or further (20 cm to 3 m), keeping the direction. Hand: move it 1 cm toward the back of the controller (your wrist) or toward its tip (up to ±50 cm) |
+  | Default wrist position (hand) | Put that hand's panel back to its standard place and facing (`x` 0, `y` 0.05, `z` 0.08, `pitch` −90 in the settings file) |
+  | ← Left / Right → / ↑ Up / ↓ Down | Head: nudge the panel by 2 cm. Hand: move it by 1 cm along the panel itself, as it is turned now: toward its right / left edge or its top / bottom edge (up to ±50 cm). The facing stays as it is |
+  | Closer / Farther | Head: move it 5 cm nearer or further (20 cm to 3 m), keeping the direction. Hand: move it 1 cm out of its face (toward you when you look at it) or back into it (up to ±50 cm) |
   | Facing: ← Left / Right → / ↑ Up / ↓ Down | Turn the panel's face by the chosen step, the same way on your head and on your hand: ↑ Up tilts the face toward the top of the panel, Right → toward its right (left/right up to ±180°, up/down up to ±90° from face-ahead on the head, or from lying flat on the hand). It snaps to the step: at 16.7°, By 5° goes to 20° or 15° |
   | ⟲ Rotate L / Rotate R ⟳ | Spin the panel in its own plane (roll) by the chosen step, counterclockwise / clockwise as you look at it (up to ±180°). Use it if the panel doesn't look level to you |
   | By 1° / By 5° | How far one press of the facing arrows and the rotate buttons turns the panel. Starts at 1° each time the app starts (not saved) |
@@ -122,12 +122,12 @@ A file with every key at its default value is in [`contrib/config.example.json`]
 | `attachment` | `"head"` | Where the panel is attached: `"head"`, `"left_wrist"` or `"right_wrist"` (the left / right controller) |
 | `position.x` / `.y` / `.z` | `-0.15` / `-0.12` / `-0.5` | Panel center relative to your head, in meters. +x is right, +y is up, −z is forward |
 | `rotation.yaw` / `.pitch` / `.roll` | `0` / `0` / `0` | Panel rotation in degrees. `yaw` turns the face left/right (positive = toward +x, −180 to 180), `pitch` tilts it up/down (positive = up, −90 to 90), `roll` spins it in its own plane (positive = counterclockwise as you look at it, −180 to 180). Applied in the order yaw → pitch → roll. All 0 keeps the panel parallel to your face. "Face me" and the corner buttons set yaw and pitch and keep roll as it is |
-| `left_wrist.x` / `.y` / `.z`, `right_wrist.x` / `.y` / `.z` | `0` / `0.05` / `0.08` | Panel center relative to that hand's controller, in meters (−0.5 to 0.5). +x is the controller's right, +y its up, +z its back (toward your wrist) |
-| `left_wrist.yaw` / `.pitch` / `.roll`, `right_wrist.yaw` / `.pitch` / `.roll` | `0` / `-90` / `0` | Panel rotation on that hand, in degrees, with the same meaning and order as `rotation`, counted from the panel lying flat on top of the controller with its top toward the controller's tip, which is `pitch` −90. `pitch` −180 to 0 (−180 stands it up facing your wrist, 0 faces the tip), `yaw` and `roll` −180 to 180 |
+| `left_wrist.x` / `.y` / `.z`, `right_wrist.x` / `.y` / `.z` | `0` / `0.05` / `0.08` | Panel center in that hand's controller coordinates as SteamVR reports them, in meters (−0.5 to 0.5). The dashboard's nudge buttons move the panel along its own axes (right, up, and out of its face, after its rotation) and save the result in these coordinates. The left and right controllers use the same axes |
+| `left_wrist.yaw` / `.pitch` / `.roll`, `right_wrist.yaw` / `.pitch` / `.roll` | `0` / `-90` / `0` | Panel rotation on that hand, in degrees, with the same meaning and order as `rotation`, counted from the standard facing, lying on the controller, which is `pitch` −90. `pitch` −180 to 0 (up to 90° either way from lying), `yaw` and `roll` −180 to 180 |
 | `wrist_fade` | `true` | On a hand, fade the panel out as its face turns away from your eyes. `false` keeps it shown at any angle |
 | `wrist_fade_end_deg` | `75` | Angle (degrees, 35 to 90) between the panel's face and the direction to your eyes at which the panel on a hand is gone. It starts fading 30° earlier |
 | `clock_format` | `24` | The clock on the panel's bottom line: `24` (24-hour), `12` (12-hour with AM / PM) or `0` (hidden) |
-| `width_m` | `0.2` | Panel width in meters. The height follows from the aspect ratio (512 × 460) |
+| `width_m` | `0.2` | Panel width in meters. The height follows from the aspect ratio: 512 × 460 with the clock, 512 × 434 with the clock off |
 | `alpha` | `0.9` | Opacity of the whole panel (0 to 1) |
 | `update_interval_ms` | `500` | Update interval (100 to 5000 ms) |
 | `graph_seconds` | `30` | Seconds shown in the graphs (5 to 300) |

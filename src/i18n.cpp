@@ -85,7 +85,7 @@ const UiText kJapanese = {
     "今すぐ確かめる", "もう一度", "閉じる",
     "くわしくは ~/.cache/frame-perf-overlay/update.log",
     // 固定先・手首・時計
-    "固定先", "頭", "左手", "右手", "手首の標準の位置", "手首側", "先端側", "手首側",
+    "固定先", "頭", "左手", "右手", "手首の標準の位置", "標準から %.0f cm",
     "傾けると消す", "消える角度", "%.0f〜%.0f°",
     "時計", "12h", "24h", "現在時刻",
 };
@@ -123,7 +123,7 @@ const UiText kEnglish = {
     "Check now", "Try again", "Close",
     "Details: ~/.cache/frame-perf-overlay/update.log",
     // Attachment, wrist and clock
-    "Attach to", "Head", "L hand", "R hand", "Default wrist position", "Toward wrist", "Toward tip", "back",
+    "Attach to", "Head", "L hand", "R hand", "Default wrist position", "%.0f cm from default",
     "Fade on tilt", "Fade angle", "%.0f–%.0f°",
     "Clock", "12h", "24h", "Local time",
 };

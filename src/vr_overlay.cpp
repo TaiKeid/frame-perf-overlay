@@ -163,6 +163,9 @@ VrOverlay::ConnectResult VrOverlay::connect(int panelWidth, int panelHeight, int
     nextPlacementAt_ = std::numeric_limits<double>::infinity();
     wristDevice_ = vr::k_unTrackedDeviceIndexInvalid;
     wristDeviceCheckedAt_ = -1.0;
+    // 新しいオーバーレイはテクスチャの全部を使う（SetOverlayTextureBounds の既定）
+    panelTextureHeight_ = panelHeight;
+    panelVisibleHeight_ = panelHeight;
 
     // 3) Vulkan と性能パネルのテクスチャ
     std::string vkMessage;
@@ -292,6 +295,18 @@ void VrOverlay::applyConfig(const Config& config) {
     if (verbose_ && config.attachment == Attachment::Head) {
         facingCheckConfig_ = config;
         facingCheckAt_ = nowSeconds() + kFacingCheckDelaySec;
+    }
+}
+
+void VrOverlay::setPanelVisibleHeight(int visibleHeight) {
+    if (!connected_ || panelHandle_ == 0 || panelTextureHeight_ <= 0) return;
+    visibleHeight = std::clamp(visibleHeight, 1, panelTextureHeight_);
+    if (visibleHeight == panelVisibleHeight_) return;
+    // テクスチャの上から visibleHeight px だけを使う（Vulkan のテクスチャは v = 0 が上の行）
+    const vr::VRTextureBounds_t bounds {0.0f, 0.0f, 1.0f,
+                                        static_cast<float>(visibleHeight) / static_cast<float>(panelTextureHeight_)};
+    if (checkOverlay("SetOverlayTextureBounds", vr::VROverlay()->SetOverlayTextureBounds(panelHandle_, &bounds))) {
+        panelVisibleHeight_ = visibleHeight;
     }
 }
 

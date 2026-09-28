@@ -56,7 +56,7 @@ set_target_properties(frame-perf-overlay PROPERTIES
 
 install(TARGETS frame-perf-overlay RUNTIME DESTINATION bin)
 
-# テスト（手首への固定の計算・時計・設定ファイル・設定パネルの当たり判定）。ctest --test-dir build で動かす。
+# テスト（手首への固定の計算・時計・設定ファイル・性能パネルの高さ・設定パネルの当たり判定）。ctest --test-dir build で動かす。
 # リリースのビルド（scripts/package.sh）は -DBUILD_TESTING=OFF でテストを作らない
 include(CTest)
 if(BUILD_TESTING)
@@ -66,13 +66,15 @@ if(BUILD_TESTING)
     src/clock.cpp
     src/config.cpp
     src/json.cpp
+    src/panel.cpp
     src/settings_panel.cpp
     src/draw.cpp
     src/i18n.cpp
     src/theme.cpp
+    src/wifi_link.cpp
   )
   target_include_directories(wrist-clock-test PRIVATE src third_party/openvr vendor/frame-updater/cpp)
   target_compile_options(wrist-clock-test PRIVATE -Wall -Wextra)
-  target_link_libraries(wrist-clock-test PRIVATE PkgConfig::CAIRO PkgConfig::FREETYPE)
+  target_link_libraries(wrist-clock-test PRIVATE PkgConfig::CAIRO PkgConfig::FREETYPE PkgConfig::LIBNL)
   add_test(NAME wrist-clock COMMAND wrist-clock-test)
 endif()

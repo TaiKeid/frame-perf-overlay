@@ -103,6 +103,17 @@ public:
     void updatePlacement(const Config& config, double now);
 
     /**
+     * 性能パネルのテクスチャのうち、上から何 px を見せるか（時計を出さないときは下の 1 行ぶんを使わない）。
+     * SetOverlayTextureBounds で上の部分だけを使うので、テクスチャは作り直さず、幅（m）はそのままで高さが縮む。
+     * 変わったときだけ OpenVR に渡し、断られたら次の呼び出しでやり直す。
+     * @param visibleHeight 見せる高さ（px。connect で渡したテクスチャの高さまで）
+     */
+    void setPanelVisibleHeight(int visibleHeight);
+
+    /** @return 今 OpenVR に渡してある、性能パネルの見せる高さ（px） */
+    int panelVisibleHeight() const { return panelVisibleHeight_; }
+
+    /**
      * 次に updatePlacement() を呼ぶ時刻。手首のときはフェードの途中なら 1/30 秒後、見えきっている・消えきっているなら
      * 0.1 秒後。頭のときや隠しているときは、やり直しが要るときだけ（それ以外は無限大）。
      * @return 時刻（秒、単調増加）
@@ -197,6 +208,8 @@ private:
     uint32_t wristDevice_ = 0xffffffff;     ///< 手首に固定しているコントローラーの番号（覚えておいて、ときどき聞き直す）
     bool wristDeviceLeft_ = true;           ///< wristDevice_ が左手の番号か
     double wristDeviceCheckedAt_ = -1.0;    ///< wristDevice_ を聞いた時刻（まだなら負）
+    int panelTextureHeight_ = 0;    ///< 性能パネルのテクスチャの高さ（px）
+    int panelVisibleHeight_ = 0;    ///< OpenVR に渡してある見せる高さ（px。テクスチャの高さなら全部）
     uint64_t panelHandle_ = 0;      ///< vr::VROverlayHandle_t（性能パネル）
     uint64_t dashboardHandle_ = 0;  ///< ダッシュボードの設定パネル
     uint64_t thumbnailHandle_ = 0;  ///< ダッシュボードのサムネイル

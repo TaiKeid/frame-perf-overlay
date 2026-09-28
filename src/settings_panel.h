@@ -32,12 +32,12 @@ enum class SettingsAction {
     PresetLeftTop,
     PresetRightTop,
     PresetWrist,  ///< 選んでいる手首の位置と向きを標準（WristPose の既定値）に戻す
-    MoveLeft,     ///< 左へ（頭: 2cm、手首: コントローラーから見て 1cm）
+    MoveLeft,     ///< 左へ（頭: 2cm、手首: パネル自身の軸で 1cm）
     MoveRight,    ///< 右へ
     MoveUp,       ///< 上へ
     MoveDown,     ///< 下へ
-    MoveNear,     ///< 頭: 見える方向のまま 5cm 近づける。手首: 手首側（コントローラーの後ろ）へ 1cm
-    MoveFar,      ///< 頭: 見える方向のまま 5cm 遠ざける。手首: コントローラーの先へ 1cm
+    MoveNear,     ///< 頭: 見える方向のまま 5cm 近づける。手首: パネルの面の向き（見ている人の方）へ 1cm
+    MoveFar,      ///< 頭: 見える方向のまま 5cm 遠ざける。手首: 面の向きの逆へ 1cm
     YawLeft,      ///< 面を左へ向ける（yaw を減らす）
     YawRight,     ///< 面を右へ向ける（yaw を増やす）
     PitchUp,      ///< 面を上へ向ける（pitch を増やす）

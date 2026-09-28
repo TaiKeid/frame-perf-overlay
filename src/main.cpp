@@ -546,7 +546,7 @@ int runDumpPng(const Options& options) {
         std::fprintf(stderr, "PNG を書き出せませんでした: %s\n", options.pngPath.c_str());
         return 1;
     }
-    std::printf("PNG を書き出しました: %s（%dx%d）\n", options.pngPath.c_str(), renderer.width(), renderer.height());
+    std::printf("PNG を書き出しました: %s（%dx%d）\n", options.pngPath.c_str(), renderer.width(), renderer.visibleHeight());
     return 0;
 }
 
@@ -790,6 +790,7 @@ int runOverlay(const Options& options) {
     double nextSlowCheck = 0.0;
     double lastPointerEvent = -1e9;  // 最後にマウスのイベントが来た時刻（操作中は細かく確かめる）
     bool userQuit = false;
+    bool panelDrawnWithClock = true;  // 最後に描いた性能パネルが時計の行つきか（テクスチャは時計つきの高さで作る）
     unsigned loopCount = 0;  // --verbose 用: 前回の表示からループが回った回数
     while (!gStopRequested && !userQuit) {
         ++loopCount;
@@ -900,8 +901,9 @@ int runOverlay(const Options& options) {
         }
         settingsWasVisible = settingsVisible;
 
-        // 性能パネル（更新間隔ごと）
+        // 性能パネル（更新間隔ごと。時計を出す・出さないが変わったら、高さが変わるのですぐ描き直す）
         double now = nowSeconds();
+        if (config.visible && (config.clockFormat != 0) != panelDrawnWithClock) nextPanel = now;
         if (now >= nextPanel) {
             if (config.visible) {
                 // 処理ごとの CPU 時間（--verbose で表示）
@@ -920,7 +922,13 @@ int runOverlay(const Options& options) {
                 const double c3 = cpuSeconds();
                 const std::vector<uint8_t>& rgba = renderer.toRgba();
                 const double c4 = cpuSeconds();
+                // 見せる高さ（時計の行の有無）が変わるとき: 広がるときは先に広げ、狭まるときは新しい画像を送ってから
+                // 狭める。どちらも切り替えの間に見えるのは透明な 1 行ぶんだけで、描いた中身が切れて見えることはない
+                const int visibleHeight = renderer.visibleHeight();
+                vr.setPanelVisibleHeight(std::max(visibleHeight, vr.panelVisibleHeight()));
                 const bool sent = vr.submitPanel(rgba.data());
+                vr.setPanelVisibleHeight(visibleHeight);
+                panelDrawnWithClock = config.clockFormat != 0;
                 const double c5 = cpuSeconds();
                 if (options.verbose && now - lastVerbose >= 2.0) {
                     lastVerbose = now;

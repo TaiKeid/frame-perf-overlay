@@ -3,6 +3,7 @@
 
 #include "draw.h"
 #include "i18n.h"
+#include "placement.h"
 #include "theme.h"
 
 #include <cairo.h>
@@ -103,6 +104,33 @@ double roundMm(double meters) {
  */
 double nudgeWrist(double meters, double delta) {
     return std::clamp(roundMm(meters + delta), -kWristOffsetLimitM, kWristOffsetLimitM);
+}
+
+/**
+ * 手首のパネルを、パネル自身の軸（今の回転をかけたあとの右・上・面の向き）で動かす。設定ファイルに保存するのは
+ * コントローラーの座標のままなので、パネルの軸の 1 歩を回転行列（wristTransform の左 3 列）でコントローラーの座標の
+ * 差分に直して足す。各軸は 1mm 単位に丸めて ±50cm に収める。
+ * @param pose 書き換える手首の位置と向き
+ * @param axis パネルの軸（0 = 右、1 = 上、2 = 面の向き = 見ている人の方）
+ * @param direction +1 でその軸の向きへ、-1 で逆へ
+ */
+void nudgeWristAlongPanel(WristPose& pose, int axis, int direction) {
+    const vr::HmdMatrix34_t m = wristTransform(pose);
+    const double step = direction * kWristNudgeM;
+    pose.x = nudgeWrist(pose.x, m.m[0][axis] * step);
+    pose.y = nudgeWrist(pose.y, m.m[1][axis] * step);
+    pose.z = nudgeWrist(pose.z, m.m[2][axis] * step);
+}
+
+/**
+ * 手首の位置が、標準の位置からどれだけ離れているか（向きによらない距離）。
+ * @param pose 手首の位置と向き
+ * @return 距離（m）
+ */
+double wristDistanceFromStandard(const WristPose& pose) {
+    const WristPose standard;
+    return std::sqrt((pose.x - standard.x) * (pose.x - standard.x) + (pose.y - standard.y) * (pose.y - standard.y) +
+                     (pose.z - standard.z) * (pose.z - standard.z));
 }
 
 /**
@@ -282,25 +310,26 @@ bool applySettingsAction(SettingsAction action, Config& config, double angleStep
         case SettingsAction::PresetWrist:
             if (wrist) pose = WristPose();
             break;
-        // 微調整。手首はコントローラーから見た向き（右 +x・上 +y・手首側 +z）で 1cm ずつ
+        // 微調整。手首はパネル自身の軸（今の向きのパネルの右・上・面の向き）で 1cm ずつ。コントローラーの軸にすると、
+        // 付けた手の向きによって、どちらへ動くのか分かりにくかった（実機で確かめた）
         case SettingsAction::MoveLeft:
-            if (wrist) pose.x = nudgeWrist(pose.x, -kWristNudgeM); else config.posX = roundMm(config.posX - kNudgeM);
+            if (wrist) nudgeWristAlongPanel(pose, 0, -1); else config.posX = roundMm(config.posX - kNudgeM);
             break;
         case SettingsAction::MoveRight:
-            if (wrist) pose.x = nudgeWrist(pose.x, kWristNudgeM); else config.posX = roundMm(config.posX + kNudgeM);
+            if (wrist) nudgeWristAlongPanel(pose, 0, +1); else config.posX = roundMm(config.posX + kNudgeM);
             break;
         case SettingsAction::MoveUp:
-            if (wrist) pose.y = nudgeWrist(pose.y, kWristNudgeM); else config.posY = roundMm(config.posY + kNudgeM);
+            if (wrist) nudgeWristAlongPanel(pose, 1, +1); else config.posY = roundMm(config.posY + kNudgeM);
             break;
         case SettingsAction::MoveDown:
-            if (wrist) pose.y = nudgeWrist(pose.y, -kWristNudgeM); else config.posY = roundMm(config.posY - kNudgeM);
+            if (wrist) nudgeWristAlongPanel(pose, 1, -1); else config.posY = roundMm(config.posY - kNudgeM);
             break;
         case SettingsAction::MoveNear:
         case SettingsAction::MoveFar: {
             const bool nearer = action == SettingsAction::MoveNear;
             if (wrist) {
-                // 手首: 「近く」の場所のボタンは手首側（コントローラーの後ろ = +z）、「遠く」は先（−z）
-                pose.z = nudgeWrist(pose.z, nearer ? kWristNudgeM : -kWristNudgeM);
+                // 手首: 「近く」は面の向き（見ている人の方）へ、「遠く」はその逆へ
+                nudgeWristAlongPanel(pose, 2, nearer ? +1 : -1);
                 break;
             }
             // 頭: 距離だけ変えて、見える方向（x/z と y/z の比）は保つ
@@ -499,9 +528,8 @@ std::string SettingsPanel::labelOf(SettingsAction action, const UiText& text) co
         case SettingsAction::MoveRight: return text.moveRight;
         case SettingsAction::MoveUp: return text.moveUp;
         case SettingsAction::MoveDown: return text.moveDown;
-        // 手首では「近く / 遠く」が目からの距離にならないので、コントローラーから見た向きの名前にする
-        case SettingsAction::MoveNear: return wristLayout_ ? text.wristNearer : text.nearer;
-        case SettingsAction::MoveFar: return wristLayout_ ? text.wristFarther : text.farther;
+        case SettingsAction::MoveNear: return text.nearer;
+        case SettingsAction::MoveFar: return text.farther;
         case SettingsAction::YawLeft: return text.yawLeft;
         case SettingsAction::YawRight: return text.yawRight;
         case SettingsAction::PitchUp: return text.pitchUp;
@@ -774,12 +802,15 @@ void SettingsPanel::drawPanelCard(const Pen& pen, const UiText& text, const Conf
 void SettingsPanel::drawPositionCard(const Pen& pen, const UiText& text, const Config& config) const {
     drawCard(pen, kPosCardX, kCardY, kPosCardW, kCardH, 20, kCard, kCard, 0);
     const double titleW = pen.text(kPosInnerX, kCardY + 42, text.rowPosition, 24, kText, true);
-    // いまの位置（cm）を見出しの右に。頭は HMD から見て（前は前方への距離）、手首はコントローラーから見て（手首側が +）
+    // いまの位置（cm）を見出しの右に。頭は HMD から見て（前は前方への距離）。手首は標準の位置からの距離だけ
+    // （ボタンはパネル自身の軸で動かすので、コントローラーの座標の数字はボタンと合わず、パネルの軸の数字は向きを
+    // 変えるだけで変わってしまう。距離なら向きによらず、どれだけ動かしたかが分かる）
     std::string where;
     if (wristLayout_) {
-        const WristPose& pose = selectedWrist(config);
-        where = std::string(text.positionNow) + "  " + text.posX + " " + signedCm(pose.x) + "  " + text.posY + " " +
-                signedCm(pose.y) + "  " + text.posZWrist + " " + signedCm(pose.z) + " cm";
+        char distance[96];
+        std::snprintf(distance, sizeof(distance), text.wristOffsetFormat,
+                      std::round(wristDistanceFromStandard(selectedWrist(config)) * 100.0) + 0.0);
+        where = std::string(text.positionNow) + "  " + distance;
     } else {
         where = std::string(text.positionNow) + "  " + text.posX + " " + signedCm(config.posX) + "  " + text.posY +
                 " " + signedCm(config.posY) + "  " + text.posZ + " " + signedCm(-config.posZ) + " cm";

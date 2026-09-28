@@ -3,10 +3,12 @@
 #include "clock.h"
 #include "config.h"
 #include "draw.h"
+#include "panel.h"
 #include "placement.h"
 #include "settings_panel.h"
 #include "theme.h"
 
+#include <cairo.h>
 #include <unistd.h>
 
 #include <cmath>
@@ -162,7 +164,7 @@ void geometry() {
     NEAR(wristFacingAlpha(composeTransform(world, makeTransform(60, 0, 0, 0, 0, -0.5)), composeTransform(world, head), 75),
          0.5);
 
-    // 手首の既定（pitch −90）: 面がコントローラーの上（+y）、パネルの上側がコントローラーの先（−z）、右側が +x
+    // 手首の既定（pitch −90）: 面がコントローラーの +y、パネルの上側がコントローラーの −z、右側が +x
     const auto wrist = wristTransform(WristPose());
     NEAR(wrist.m[0][2], 0);
     NEAR(wrist.m[1][2], 1);
@@ -172,7 +174,7 @@ void geometry() {
     NEAR(wrist.m[0][3], 0);
     NEAR(wrist.m[1][3], 0.05);
     NEAR(wrist.m[2][3], 0.08);
-    // 手首の pitch −180 で、面が手首側（+z）を向いて立つ（上側は上）
+    // 手首の pitch −180 で、面がコントローラーの +z を向き、上側が +y
     WristPose standing;
     standing.pitch = -180;
     const auto stand = wristTransform(standing);
@@ -218,6 +220,55 @@ void geometry() {
     }
     NEAR(alpha, smoothWristAlpha(0, 1, 1));
     CHECK(smoothWristAlpha(1, 0, 0.2) < 0.1);
+}
+
+/**
+ * 手首の微調整は、パネル自身の軸で動く: 「↑ 上」はパネルの上方向、「右 →」は右方向、「近く」は面の向き
+ * （見ている人の方）へ 1cm。既定の向きと、いくつかの回転で確かめる。保存するのはコントローラーの座標のまま。
+ */
+void panelAxisNudges() {
+    const double poses[][3] = {{0, -90, 0}, {30, -60, 20}, {-45, -135, -70}, {170, -10, 95}, {0, -180, 0}};
+    const struct {
+        SettingsAction action;
+        int axis;
+        double sign;
+    } moves[] = {
+        {SettingsAction::MoveRight, 0, 1}, {SettingsAction::MoveLeft, 0, -1}, {SettingsAction::MoveUp, 1, 1},
+        {SettingsAction::MoveDown, 1, -1}, {SettingsAction::MoveNear, 2, 1},  {SettingsAction::MoveFar, 2, -1},
+    };
+    for (const auto& angles : poses) {
+        for (const auto& move : moves) {
+            Config c;
+            c.attachment = Attachment::RightWrist;
+            c.rightWrist.yaw = angles[0];
+            c.rightWrist.pitch = angles[1];
+            c.rightWrist.roll = angles[2];
+            const WristPose before = c.rightWrist;
+            const auto axes = wristTransform(before);
+            CHECK(applySettingsAction(move.action, c));
+            const double delta[3] = {c.rightWrist.x - before.x, c.rightWrist.y - before.y, c.rightWrist.z - before.z};
+            for (int i = 0; i < 3; ++i) {
+                // 1mm 単位に丸めるので、各軸 0.6mm までの差は許す
+                nearAt(delta[i], move.sign * 0.01 * axes.m[i][move.axis], 0.0006, __LINE__);
+            }
+            // 向きは変わらない
+            NEAR(c.rightWrist.yaw, before.yaw);
+            NEAR(c.rightWrist.pitch, before.pitch);
+            NEAR(c.rightWrist.roll, before.roll);
+        }
+    }
+    // 既定の向きでは、右 → はコントローラーの +x（前の版と同じ向き）
+    Config c;
+    c.attachment = Attachment::LeftWrist;
+    CHECK(applySettingsAction(SettingsAction::MoveRight, c));
+    NEAR(c.leftWrist.x, 0.01);
+    NEAR(c.leftWrist.y, 0.05);
+    NEAR(c.leftWrist.z, 0.08);
+    // ±50cm に収める
+    c.leftWrist.x = 0.495;
+    CHECK(applySettingsAction(SettingsAction::MoveRight, c));
+    NEAR(c.leftWrist.x, 0.5);
+    CHECK(!applySettingsAction(SettingsAction::MoveRight, c));
 }
 
 /** CPU を抑えるための確かめる間隔と、粗い間隔のあとでもいきなり変わらないこと。 */
@@ -380,16 +431,17 @@ void configuration(const std::string& file) {
     const WristPose standard;
     CHECK(!(c.leftWrist != standard) && !(c.rightWrist != standard));
 
-    // 左手: 同じボタンで、コントローラーから見た向きに 1cm ずつ・左手の向きだけを動かす
+    // 左手: 同じボタンで、パネル自身の軸に 1cm ずつ・左手の値だけを動かす。既定の向き（pitch −90）では
+    // パネルの右 = コントローラーの +x、上 = −z、面の向き（近く）= +y
     CHECK(applySettingsAction(SettingsAction::AttachLeft, c));
     const double headX = c.posX, headZ = c.posZ;
     CHECK(applySettingsAction(SettingsAction::MoveRight, c));
     CHECK(applySettingsAction(SettingsAction::MoveUp, c));
-    CHECK(applySettingsAction(SettingsAction::MoveNear, c));  // 手首側（+z）
+    CHECK(applySettingsAction(SettingsAction::MoveNear, c));
     CHECK(applySettingsAction(SettingsAction::MoveFar, c));
-    CHECK(applySettingsAction(SettingsAction::MoveFar, c));   // 先（−z）
+    CHECK(applySettingsAction(SettingsAction::MoveFar, c));
     NEAR(c.leftWrist.x, 0.01);
-    NEAR(c.leftWrist.y, 0.06);
+    NEAR(c.leftWrist.y, 0.04);
     NEAR(c.leftWrist.z, 0.07);
     CHECK(applySettingsAction(SettingsAction::PitchDown, c));  // 1° 刻み
     NEAR(c.leftWrist.pitch, -91);
@@ -401,7 +453,7 @@ void configuration(const std::string& file) {
     CHECK(applySettingsAction(SettingsAction::AttachRight, c));
     CHECK(applySettingsAction(SettingsAction::MoveDown, c));
     CHECK(applySettingsAction(SettingsAction::YawRight, c, 5));
-    NEAR(c.rightWrist.y, 0.04);
+    NEAR(c.rightWrist.z, 0.09);  // ↓ 下 = パネルの上の逆 = コントローラーの +z
     NEAR(c.rightWrist.yaw, 5);
     CHECK(!(c.leftWrist != left));
 
@@ -423,6 +475,19 @@ void configuration(const std::string& file) {
     NEAR(c.pitchDeg, 5);
     NEAR(c.rollDeg, 1);
     CHECK(!(c.leftWrist != left));
+
+    // 左手と右手で、同じボタンは設定の同じ値を同じ向きに動かす
+    for (const SettingsAction action :
+         {SettingsAction::MoveLeft, SettingsAction::MoveRight, SettingsAction::MoveUp, SettingsAction::MoveDown,
+          SettingsAction::MoveNear, SettingsAction::MoveFar, SettingsAction::YawLeft, SettingsAction::YawRight,
+          SettingsAction::PitchUp, SettingsAction::PitchDown, SettingsAction::RollLeft, SettingsAction::RollRight}) {
+        Config hands;
+        hands.attachment = Attachment::LeftWrist;
+        CHECK(applySettingsAction(action, hands, 5));
+        hands.attachment = Attachment::RightWrist;
+        CHECK(applySettingsAction(action, hands, 5));
+        CHECK(!(hands.leftWrist != hands.rightWrist));
+    }
 
     // 手首の標準の位置: 選んでいる手だけ既定に戻す
     CHECK(applySettingsAction(SettingsAction::PresetWrist, c));
@@ -500,6 +565,38 @@ void configuration(const std::string& file) {
     NEAR(c.pitchDeg, 0);
     NEAR(c.yawDeg, 0);
     NEAR(c.rollDeg, 0);
+}
+
+/**
+ * 性能パネルの高さ: 時計を出すと 460、出さないと時計の 1 行ぶん詰めた 434（テクスチャは 460 のまま、下は透明）。
+ * @param directory PNG を書く一時フォルダ
+ */
+void panelHeights(const std::string& directory) {
+    Config c;
+    FontSet fonts;
+    fonts.load(c.fontPath, c.boldFontPath);
+    PanelRenderer renderer(fonts);
+    PanelState state;
+    CHECK(renderer.width() == 512 && renderer.height() == 460);
+    CHECK(PanelRenderer::heightFor(true) == 460 && PanelRenderer::heightFor(false) == 434);
+    for (const int format : {24, 12, 0}) {
+        c.clockFormat = format;
+        renderer.render(state, c);
+        const int expected = format != 0 ? 460 : 434;
+        CHECK(renderer.visibleHeight() == expected);
+        const std::vector<uint8_t>& rgba = renderer.toRgba();
+        CHECK(rgba.size() == 512u * 460u * 4u);
+        // 見える部分のいちばん下の近く（角の丸みの内側）は地の色で不透明、その下は透明
+        const auto alphaAt = [&rgba](int x, int y) { return rgba[(static_cast<size_t>(y) * 512 + x) * 4 + 3]; };
+        CHECK(alphaAt(256, expected - 3) == 255);
+        if (expected < 460) CHECK(alphaAt(256, expected + 2) == 0 && alphaAt(256, 458) == 0);
+        // PNG は見える部分の高さで書き出す
+        const std::string path = directory + "/panel-" + std::to_string(format) + ".png";
+        CHECK(renderer.writePng(path));
+        cairo_surface_t* png = cairo_image_surface_create_from_png(path.c_str());
+        CHECK(cairo_image_surface_get_width(png) == 512 && cairo_image_surface_get_height(png) == expected);
+        cairo_surface_destroy(png);
+    }
 }
 
 /** ボタン 1 つの期待する場所（設定パネルの画像の px）。 */
@@ -676,12 +773,14 @@ int main() {
     if (mkdtemp(directory) == nullptr) return 2;
     try {
         geometry();
+        panelAxisNudges();
         pollScheduling();
         placementRecovery();
         clockCases();
         configuration(std::string(directory) + "/config.json");
+        panelHeights(directory);
         controls(directory);
-        std::cout << "Geometry, rotation convention, polling, placement recovery, clock, config and UI controls passed.\n";
+        std::cout << "Geometry, rotation convention, panel-axis nudges, polling, placement recovery, clock, config, panel heights and UI controls passed.\n";
         std::filesystem::remove_all(directory);
     } catch (const std::exception& error) {
         std::cerr << "FAIL: " << error.what() << " (artifacts: " << directory << ")\n";
