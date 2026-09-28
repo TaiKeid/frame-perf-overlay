@@ -571,7 +571,6 @@ int runDumpSettingsPng(const Options& options) {
     if (preview == "notinstalled") autostartView = {AutostartStatus::State::NotInstalled, false, false};
     if (preview == "busy") autostartView = {AutostartStatus::State::Enabled, true, false};
     if (preview == "failed") autostartView = {AutostartStatus::State::Enabled, false, true};
-    if (config.attachment != Attachment::Head) panel.showWristPage();
     const frame_updater::UpdateStatus updateView = fakeUpdateStatus(options.previewUpdate);
     if (options.previewUpdate == "confirm") panel.armUpdateConfirmForPreview();
     panel.render(config, autostartView, updateView);

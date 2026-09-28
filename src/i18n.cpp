@@ -84,6 +84,10 @@ const UiText kJapanese = {
     "更新できませんでした（今の版のままです）:", "新しい版を確かめられませんでした:",
     "今すぐ確かめる", "もう一度", "閉じる",
     "くわしくは ~/.cache/frame-perf-overlay/update.log",
+    // 固定先・手首・時計
+    "固定先", "頭", "左手", "右手", "手首の標準の位置", "手首側", "先端側", "手首側",
+    "傾けると消す", "消える角度", "%.0f〜%.0f°",
+    "時計", "12h", "24h", "現在時刻",
 };
 
 const UiText kEnglish = {
@@ -118,6 +122,10 @@ const UiText kEnglish = {
     "The update failed (nothing was changed):", "Couldn't check for updates:",
     "Check now", "Try again", "Close",
     "Details: ~/.cache/frame-perf-overlay/update.log",
+    // Attachment, wrist and clock
+    "Attach to", "Head", "L hand", "R hand", "Default wrist position", "Toward wrist", "Toward tip", "back",
+    "Fade on tilt", "Fade angle", "%.0f–%.0f°",
+    "Clock", "12h", "24h", "Local time",
 };
 
 /**
@@ -216,20 +224,4 @@ bool parseLanguage(const std::string& code, Language& language) {
         return true;
     }
     return false;
-}
-
-const WristUiText& wristUiText(Language language) {
-    static const WristUiText en {
-        "Wrist & clock", "Panel & position", "Attachment", "Head", "Left wrist", "Right wrist",
-        "Offsets (cm): X right / Y up / Z back", "Select a wrist to edit its offsets and rotation",
-        "Clock", "Rotation (degrees)", "Pitch X", "Yaw Y", "Roll Z",
-        "Angle fade", "Fade range", "Head position"
-    };
-    static const WristUiText ja {
-        "手首・時計", "パネル・位置", "固定先", "頭", "左手首", "右手首",
-        "位置 (cm): X 右 / Y 上 / Z 後", "手首を選ぶと位置・回転を調整できます",
-        "時計", "回転 (度)", "ピッチ X", "ヨー Y", "ロール Z",
-        "角度フェード", "フェード範囲", "頭基準の位置"
-    };
-    return language == Language::Ja ? ja : en;
 }

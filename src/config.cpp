@@ -145,18 +145,44 @@ void readThresholds(const JsonValue& object, Thresholds& th, std::vector<std::st
     readNumber(object, "controller_crit_pct", 0.0, 100.0, th.controllerCritPct, warnings);
 }
 
+/**
+ * 手首の位置と向き（left_wrist / right_wrist）を読む。キーが無ければ何もしない。
+ * @param root 設定ファイルの一番外側
+ * @param key "left_wrist" か "right_wrist"
+ * @param pose 書き込み先
+ * @param warnings 追加先
+ */
+void readWristPose(const JsonValue& root, const char* key, WristPose& pose, std::vector<std::string>& warnings) {
+    const JsonValue* object = root.get(key);
+    if (object == nullptr) return;
+    if (!object->isObject()) {
+        warnings.push_back(std::string(key) + " は {\"x\":..,\"y\":..,\"z\":..,\"pitch\":..,\"yaw\":..,\"roll\":..} で書いてください");
+        return;
+    }
+    warnUnknownKeys(*object, {"x", "y", "z", "pitch", "yaw", "roll"}, std::string(key) + ".", warnings);
+    readNumber(*object, "x", -0.5, 0.5, pose.x, warnings);
+    readNumber(*object, "y", -0.5, 0.5, pose.y, warnings);
+    readNumber(*object, "z", -0.5, 0.5, pose.z, warnings);
+    readNumber(*object, "pitch", -180.0, 0.0, pose.pitch, warnings);
+    readNumber(*object, "yaw", -180.0, 180.0, pose.yaw, warnings);
+    readNumber(*object, "roll", -180.0, 180.0, pose.roll, warnings);
+}
+
 }  // namespace
 
 const char* attachmentName(Attachment attachment) {
     switch (attachment) {
         case Attachment::LeftWrist: return "left_wrist";
         case Attachment::RightWrist: return "right_wrist";
-        default: return "head";
+        case Attachment::Head: break;
     }
+    return "head";
 }
+
 WristPose& selectedWrist(Config& config) {
     return config.attachment == Attachment::RightWrist ? config.rightWrist : config.leftWrist;
 }
+
 const WristPose& selectedWrist(const Config& config) {
     return config.attachment == Attachment::RightWrist ? config.rightWrist : config.leftWrist;
 }
@@ -191,39 +217,24 @@ bool loadConfig(const std::string& path, Config& out, std::vector<std::string>& 
 
     Config config;  // 書かれていない項目は既定値
     warnUnknownKeys(root,
-                    {"visible", "update_check", "language", "position", "rotation", "width_m", "alpha", "update_interval_ms", "graph_seconds",
-                     "font", "font_bold", "thresholds", "attachment", "left_wrist", "right_wrist",
-                     "wrist_fade", "wrist_fade_end_deg", "clock_format"},
+                    {"visible", "update_check", "language", "attachment", "position", "rotation", "left_wrist",
+                     "right_wrist", "wrist_fade", "wrist_fade_end_deg", "clock_format", "width_m", "alpha",
+                     "update_interval_ms", "graph_seconds", "font", "font_bold", "thresholds"},
                     "", warnings);
     readBool(root, "visible", config.visible, warnings);
     readBool(root, "update_check", config.updateCheck, warnings);
-    std::string attachment = "head";
-    readString(root, "attachment", attachment, warnings);
-    if (attachment == "left_wrist") config.attachment = Attachment::LeftWrist;
-    else if (attachment == "right_wrist") config.attachment = Attachment::RightWrist;
-    else if (attachment != "head") warnings.push_back("attachment: expected head, left_wrist or right_wrist");
-    for (const char* key : {"left_wrist", "right_wrist"}) {
-        if (const JsonValue* pose = root.get(key)) {
-            if (!pose->isObject()) { warnings.push_back(std::string(key) + ": expected an object"); continue; }
-            WristPose& p = std::string(key) == "left_wrist" ? config.leftWrist : config.rightWrist;
-            warnUnknownKeys(*pose, {"x", "y", "z", "pitch", "yaw", "roll"}, std::string(key) + ".", warnings);
-            readNumber(*pose, "x", -0.5, 0.5, p.x, warnings);
-            readNumber(*pose, "y", -0.5, 0.5, p.y, warnings);
-            readNumber(*pose, "z", -0.5, 0.5, p.z, warnings);
-            readNumber(*pose, "pitch", -180, 180, p.pitch, warnings);
-            readNumber(*pose, "yaw", -180, 180, p.yaw, warnings);
-            readNumber(*pose, "roll", -180, 180, p.roll, warnings);
-        }
-    }
-    readBool(root, "wrist_fade", config.wristFade, warnings);
-    readNumber(root, "wrist_fade_end_deg", 35, 90, config.wristFadeEndDeg, warnings);
-    double clockFormat = 24;
-    readNumber(root, "clock_format", 0, 24, clockFormat, warnings);
-    if (clockFormat == 0 || clockFormat == 12 || clockFormat == 24) config.clockFormat = static_cast<int>(clockFormat);
-    else warnings.push_back("clock_format: expected 0, 12 or 24");
     std::string language = languageCode(config.language);
     readString(root, "language", language, warnings);
     if (!parseLanguage(language, config.language)) warnings.push_back("language は \"ja\" か \"en\" で書いてください");
+    std::string attachment = attachmentName(config.attachment);
+    readString(root, "attachment", attachment, warnings);
+    if (attachment == "left_wrist") {
+        config.attachment = Attachment::LeftWrist;
+    } else if (attachment == "right_wrist") {
+        config.attachment = Attachment::RightWrist;
+    } else if (attachment != "head") {
+        warnings.push_back("attachment は \"head\" か \"left_wrist\" か \"right_wrist\" で書いてください");
+    }
     if (const JsonValue* position = root.get("position")) {
         if (position->isObject()) {
             warnUnknownKeys(*position, {"x", "y", "z"}, "position.", warnings);
@@ -242,6 +253,17 @@ bool loadConfig(const std::string& path, Config& out, std::vector<std::string>& 
             readNumber(*rotation, "roll", -180.0, 180.0, config.rollDeg, warnings);
         } else {
             warnings.push_back("rotation は {\"yaw\":..,\"pitch\":..,\"roll\":..} で書いてください（度）");
+        }
+    }
+    readWristPose(root, "left_wrist", config.leftWrist, warnings);
+    readWristPose(root, "right_wrist", config.rightWrist, warnings);
+    readBool(root, "wrist_fade", config.wristFade, warnings);
+    readNumber(root, "wrist_fade_end_deg", 35.0, 90.0, config.wristFadeEndDeg, warnings);
+    if (const JsonValue* clock = root.get("clock_format")) {
+        if (clock->isNumber() && (clock->number == 0 || clock->number == 12 || clock->number == 24)) {
+            config.clockFormat = static_cast<int>(clock->number);
+        } else {
+            warnings.push_back("clock_format は 0（出さない）か 12 か 24 で書いてください");
         }
     }
     readNumber(root, "width_m", 0.03, 2.0, config.widthM, warnings);
@@ -310,27 +332,30 @@ bool saveConfig(const std::string& path, const Config& config, std::string& erro
         error = "フォルダを作れません: " + std::string(std::strerror(errno));
         return false;
     }
+    /**
+     * 手首の位置と向きを 1 行の JSON にする。
+     */
     const auto poseJson = [](const WristPose& p) {
-        return "{ \"x\": " + jsonNumber(p.x) + ", \"y\": " + jsonNumber(p.y) + ", \"z\": " + jsonNumber(p.z)
-            + ", \"pitch\": " + jsonNumber(p.pitch) + ", \"yaw\": " + jsonNumber(p.yaw)
-            + ", \"roll\": " + jsonNumber(p.roll) + " }";
+        return "{ \"x\": " + jsonNumber(p.x) + ", \"y\": " + jsonNumber(p.y) + ", \"z\": " + jsonNumber(p.z) +
+               ", \"pitch\": " + jsonNumber(p.pitch) + ", \"yaw\": " + jsonNumber(p.yaw) +
+               ", \"roll\": " + jsonNumber(p.roll) + " }";
     };
     const Thresholds& th = config.thresholds;
     std::ostringstream out;
     out << "{\n"
+        << "  \"visible\": " << (config.visible ? "true" : "false") << ",\n"
+        << "  \"update_check\": " << (config.updateCheck ? "true" : "false") << ",\n"
+        << "  \"language\": \"" << languageCode(config.language) << "\",\n"
         << "  \"attachment\": " << jsonString(attachmentName(config.attachment)) << ",\n"
+        << "  \"position\": { \"x\": " << jsonNumber(config.posX) << ", \"y\": " << jsonNumber(config.posY)
+        << ", \"z\": " << jsonNumber(config.posZ) << " },\n"
+        << "  \"rotation\": { \"yaw\": " << jsonNumber(config.yawDeg) << ", \"pitch\": " << jsonNumber(config.pitchDeg)
+        << ", \"roll\": " << jsonNumber(config.rollDeg) << " },\n"
         << "  \"left_wrist\": " << poseJson(config.leftWrist) << ",\n"
         << "  \"right_wrist\": " << poseJson(config.rightWrist) << ",\n"
         << "  \"wrist_fade\": " << (config.wristFade ? "true" : "false") << ",\n"
         << "  \"wrist_fade_end_deg\": " << jsonNumber(config.wristFadeEndDeg) << ",\n"
         << "  \"clock_format\": " << config.clockFormat << ",\n"
-        << "  \"visible\": " << (config.visible ? "true" : "false") << ",\n"
-        << "  \"update_check\": " << (config.updateCheck ? "true" : "false") << ",\n"
-        << "  \"language\": \"" << languageCode(config.language) << "\",\n"
-        << "  \"position\": { \"x\": " << jsonNumber(config.posX) << ", \"y\": " << jsonNumber(config.posY)
-        << ", \"z\": " << jsonNumber(config.posZ) << " },\n"
-        << "  \"rotation\": { \"yaw\": " << jsonNumber(config.yawDeg) << ", \"pitch\": " << jsonNumber(config.pitchDeg)
-        << ", \"roll\": " << jsonNumber(config.rollDeg) << " },\n"
         << "  \"width_m\": " << jsonNumber(config.widthM) << ",\n"
         << "  \"alpha\": " << jsonNumber(config.alpha) << ",\n"
         << "  \"update_interval_ms\": " << config.updateIntervalMs << ",\n"
@@ -385,19 +410,19 @@ bool saveConfig(const std::string& path, const Config& config, std::string& erro
 
 void resetDisplaySettings(Config& config) {
     const Config defaults;
-    config.attachment = defaults.attachment;
-    config.leftWrist = defaults.leftWrist;
-    config.rightWrist = defaults.rightWrist;
-    config.wristFade = defaults.wristFade;
-    config.wristFadeEndDeg = defaults.wristFadeEndDeg;
-    config.clockFormat = defaults.clockFormat;
     config.visible = defaults.visible;
+    config.attachment = defaults.attachment;
     config.posX = defaults.posX;
     config.posY = defaults.posY;
     config.posZ = defaults.posZ;
     config.yawDeg = defaults.yawDeg;
     config.pitchDeg = defaults.pitchDeg;
     config.rollDeg = defaults.rollDeg;
+    config.leftWrist = defaults.leftWrist;
+    config.rightWrist = defaults.rightWrist;
+    config.wristFade = defaults.wristFade;
+    config.wristFadeEndDeg = defaults.wristFadeEndDeg;
+    config.clockFormat = defaults.clockFormat;
     config.widthM = defaults.widthM;
     config.alpha = defaults.alpha;
 }
@@ -429,10 +454,10 @@ void headFacingAngles(const Config& config, double& yaw, double& pitch) {
 
 }  // namespace
 
-void panelRotation(const Config& config, double r[3][3]) {
-    const double cy = std::cos(config.yawDeg * kDegToRad), sy = std::sin(config.yawDeg * kDegToRad);
-    const double cp = std::cos(config.pitchDeg * kDegToRad), sp = std::sin(config.pitchDeg * kDegToRad);
-    const double cr = std::cos(config.rollDeg * kDegToRad), sr = std::sin(config.rollDeg * kDegToRad);
+void panelRotation(double yawDeg, double pitchDeg, double rollDeg, double r[3][3]) {
+    const double cy = std::cos(yawDeg * kDegToRad), sy = std::sin(yawDeg * kDegToRad);
+    const double cp = std::cos(pitchDeg * kDegToRad), sp = std::sin(pitchDeg * kDegToRad);
+    const double cr = std::cos(rollDeg * kDegToRad), sr = std::sin(rollDeg * kDegToRad);
     // Ry(yaw) = [cy 0 sy; 0 1 0; −sy 0 cy]、Rx(−pitch) = [1 0 0; 0 cp sp; 0 −sp cp]、Rz(roll) = [cr −sr 0; sr cr 0; 0 0 1]
     // を掛けた R = Ry · Rx(−pitch) · Rz。3 列目（パネルの表の向き）は (sy·cp, sp, cy·cp)
     r[0][0] = cy * cr - sy * sp * sr;
@@ -444,6 +469,10 @@ void panelRotation(const Config& config, double r[3][3]) {
     r[2][0] = -sy * cr - cy * sp * sr;
     r[2][1] = sy * sr - cy * sp * cr;
     r[2][2] = cy * cp;
+}
+
+void panelRotation(const Config& config, double r[3][3]) {
+    panelRotation(config.yawDeg, config.pitchDeg, config.rollDeg, r);
 }
 
 void faceHead(Config& config) {

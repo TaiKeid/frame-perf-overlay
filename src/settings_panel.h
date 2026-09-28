@@ -6,6 +6,7 @@
 #include "update_check.h"  // vendor/frame-updater/cpp（CMake の include dir で見つかる）
 
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -18,41 +19,46 @@ typedef struct _cairo_surface cairo_surface_t;
 /** 設定パネルのボタンが表す操作。 */
 enum class SettingsAction {
     None,
-    ChangePage,
-    AttachHead, AttachLeft, AttachRight,
-    OffsetXDown, OffsetXUp, OffsetYDown, OffsetYUp, OffsetZDown, OffsetZUp,
-    WristPitchDown, WristPitchUp, YawDown, YawUp, RollDown, RollUp,
-    ClockOff, Clock12, Clock24,
-    FadeOn, FadeOff, FadeAngleDown, FadeAngleUp,
     ShowOn,
     ShowOff,
     LanguageJa,
     LanguageEn,
+    AttachHead,   ///< 固定先を頭に
+    AttachLeft,   ///< 固定先を左手（のコントローラー）に
+    AttachRight,  ///< 固定先を右手（のコントローラー）に
     PresetLeftBottom,
     PresetCenterBottom,
     PresetRightBottom,
     PresetLeftTop,
     PresetRightTop,
-    MoveLeft,
-    MoveRight,
-    MoveUp,
-    MoveDown,
-    MoveNear,
-    MoveFar,
+    PresetWrist,  ///< 選んでいる手首の位置と向きを標準（WristPose の既定値）に戻す
+    MoveLeft,     ///< 左へ（頭: 2cm、手首: コントローラーから見て 1cm）
+    MoveRight,    ///< 右へ
+    MoveUp,       ///< 上へ
+    MoveDown,     ///< 下へ
+    MoveNear,     ///< 頭: 見える方向のまま 5cm 近づける。手首: 手首側（コントローラーの後ろ）へ 1cm
+    MoveFar,      ///< 頭: 見える方向のまま 5cm 遠ざける。手首: コントローラーの先へ 1cm
     YawLeft,      ///< 面を左へ向ける（yaw を減らす）
     YawRight,     ///< 面を右へ向ける（yaw を増やす）
     PitchUp,      ///< 面を上へ向ける（pitch を増やす）
     PitchDown,    ///< 面を下へ向ける（pitch を減らす）
     RollLeft,     ///< 画面内で左に回す（面を見て反時計回り。roll を増やす）
     RollRight,    ///< 画面内で右に回す（面を見て時計回り。roll を減らす）
-    FaceMe,       ///< 今の位置のまま、面を頭に向ける（roll はそのまま）
-    FaceForward,  ///< 回転なし（0, 0, 0）に戻す
+    FaceMe,       ///< 今の位置のまま、面を頭に向ける（roll はそのまま。頭のときだけ）
+    FaceForward,  ///< 回転なし（0, 0, 0）に戻す（頭のときだけ）
     AngleStep1,   ///< 向きのボタンの刻みを 1° に（設定パネルの中だけで扱う）
     AngleStep5,   ///< 向きのボタンの刻みを 5° に（設定パネルの中だけで扱う）
+    FadeOn,       ///< 手首のとき、傾けると消す
+    FadeOff,      ///< 手首のとき、傾けても消さない
+    FadeAngleDown,  ///< 消える角度を 5° 小さく（35° まで）
+    FadeAngleUp,    ///< 消える角度を 5° 大きく（90° まで）
     SizeDown,
     SizeUp,
     AlphaDown,
     AlphaUp,
+    ClockOff,     ///< 時計を出さない
+    Clock12,      ///< 時計を 12 時間制に
+    Clock24,      ///< 時計を 24 時間制に
     Reset,
     Quit,  ///< アプリを終了（2 回目の押下で確定したときだけ返る）
     AutostartOn,   ///< 自動起動を有効に（systemctl --user enable）
@@ -66,10 +72,10 @@ enum class SettingsAction {
 };
 
 /**
- * 操作を設定に反映する（Quit と None は何もしない）。
+ * 操作を設定に反映する（Quit と None は何もしない）。位置と向きのボタンは、今の固定先（頭・左手・右手）の値を動かす。
  * @param action 操作
  * @param config 書き換える設定
- * @param angleStepDeg 向きのボタン（左右・上下）の刻み（度。1 か 5）。その刻みの目盛りに寄せて動かす
+ * @param angleStepDeg 向きのボタン（左右・上下・回す）の刻み（度。1 か 5）。その刻みの目盛りに寄せて動かす
  * @return 設定が変わったら true
  */
 bool applySettingsAction(SettingsAction action, Config& config, double angleStepDeg = 1.0);
@@ -151,7 +157,6 @@ public:
      * 見た目の確認用に「もう一度押すと終了」の状態にする（--dump-settings-png 用）。
      */
     void armQuitForPreview();
-    void showWristPage();
 
     /**
      * 見た目の確認用に、更新の確認（「%s に更新しますか？」）の状態にする（--dump-settings-png 用）。
@@ -181,9 +186,7 @@ private:
     cairo_t* cr_ = nullptr;
     std::vector<uint8_t> rgba_;
     std::vector<Button> buttons_;
-    bool wristPage_ = false;
-    bool wristSelected_ = false;
-    Language language_ = Language::En;
+    bool wristLayout_ = false;  ///< 今のボタンの配置が手首用か（固定先が変わったら render() で置き直す）
     SettingsAction hover_ = SettingsAction::None;
     bool autostartInstalled_ = true;  ///< 最後に描いたときユニットがあったか（無ければ自動起動のボタンは押せない）
     SettingsAction pressed_ = SettingsAction::None;
@@ -192,7 +195,11 @@ private:
     bool updateConfirmArmed_ = false;  ///< 「更新する」を 1 回押して、確認の表示を出している間
     double angleStepDeg_ = 1.0;        ///< 向きのボタンの刻み（度）。「1° ずつ / 5° ずつ」で切り替える（起動中だけ覚える）
 
-    /** 左右と向きのカードのボタンの配置を作る（起動時に 1 回。下の段は render() のたびに置き直す）。 */
+    /**
+     * 3 つのカードのボタンの配置を作る（起動時と、固定先が頭と手首のあいだで変わったとき。下の段と更新の帯は
+     * render() のたびに置き直す）。手首のときは、位置のボタンが「手首の標準の位置」だけになり、向きのカードの
+     * いちばん下の段が「自分に向ける / 正面向き」から「傾けると消す」「消える角度」に変わる。
+     */
     void layoutButtons();
 
     /**
@@ -230,15 +237,14 @@ private:
     void placeFooterButton(SettingsAction action, double x, double y, double w, double h);
 
     /**
-     * 2 択のセグメント切り替え（丸い枠のピルの中で、選択中がアクセントの塗り ＋ ✓）を描く。
+     * セグメント切り替え（丸い枠のピルの中で、選択中がアクセントの塗り ＋ ✓）を描く。2 択でも 3 択でも使う。
      * @param pen 描画の道具
      * @param text 言語の表
-     * @param left 左の操作
-     * @param right 右の操作
-     * @param selected 選択中（0 = 左、1 = 右、-1 = どちらでもない）
+     * @param actions 左から順の操作（ボタンとして置いてあること）
+     * @param selected 選択中の番号（0 から。-1 = どれでもない）
      * @param usable 押せるか（押せないときは枠なし・薄い文字）
      */
-    void drawSegmented(const Pen& pen, const UiText& text, SettingsAction left, SettingsAction right, int selected,
+    void drawSegmented(const Pen& pen, const UiText& text, std::initializer_list<SettingsAction> actions, int selected,
                        bool usable) const;
 
     /**
@@ -265,17 +271,16 @@ private:
     double drawHeader(const Pen& pen, const UiText& text, const Config& config) const;
 
     /**
-     * 左のカード「パネル」（表示・大きさ・透明度・既定に戻す）を描く。
+     * 左のカード「パネル」（表示・大きさ・透明度・時計・既定に戻す）を描く。
      * @param pen 描画の道具
      * @param text 言語の表
      * @param config 今の設定
      */
-    void drawWristPage(const Pen& pen, const UiText& text, const Config& config) const;
-
     void drawPanelCard(const Pen& pen, const UiText& text, const Config& config) const;
 
     /**
-     * 右のカード「位置」（位置の 3×2・微調整の十字・近く / 遠く・いまの位置）を描く。
+     * 真ん中のカード「位置」（固定先・位置のボタン・微調整の十字・近く / 遠く・いまの位置）を描く。
+     * 頭のときは位置のボタンが 5 つ（左上・右上・左下・中央下・右下）、手首のときは「手首の標準の位置」の 1 つ。
      * @param pen 描画の道具
      * @param text 言語の表
      * @param config 今の設定
@@ -283,8 +288,8 @@ private:
     void drawPositionCard(const Pen& pen, const UiText& text, const Config& config) const;
 
     /**
-     * 下の横長のカード「向き」（左右・上下の向きの十字と、その上の角の左に回す / 右に回す、刻みの 1° / 5°、
-     * 自分に向ける、正面向き、いまの向き）を描く。
+     * 右のカード「向き」（回す・上下・左右の十字、刻みの 1° / 5°、いまの向き）を描く。いちばん下の段は、頭のときは
+     * 自分に向ける / 正面向き、手首のときは「傾けると消す」と「消える角度」。
      * @param pen 描画の道具
      * @param text 言語の表
      * @param config 今の設定

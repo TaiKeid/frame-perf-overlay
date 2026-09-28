@@ -1,10 +1,10 @@
 // パネル描画の実装。数字 + 直近の折れ線グラフ + しきい値による色分け。
 #include "panel.h"
 
+#include "clock.h"
 #include "draw.h"
 #include "i18n.h"
 #include "theme.h"
-#include "clock.h"
 
 #include <cairo.h>
 
@@ -23,7 +23,7 @@ constexpr int kLeftWidth = 188;               // 数字の列の幅
 constexpr int kGraphX = kPad + kLeftWidth + 8;
 constexpr int kGraphWidth = kWidth - kPad - kGraphX;
 constexpr int kTextLineHeight = 26;
-constexpr int kTextRows = 4;
+constexpr int kTextRows = 4;                  // CPU・無線・電池の 3 行と時計の 1 行
 constexpr int kTextTopGap = 18;               // 温度の段と、下の文字の段の間
 constexpr int kHeight = kPad + 3 * kRowHeight + 2 * kRowGap + kTextTopGap + kTextRows * kTextLineHeight + 12;
 constexpr double kCardInsetX = 8;             // 段のカードの左右（パネルの端から）
@@ -676,9 +676,10 @@ void PanelRenderer::render(const PanelState& state, const Config& config) {
     top += kRowHeight + kRowGap;
     drawTempRow(pen, top, state, config);
     drawTextRows(pen, kTextTop, state, config);
+    // 4 行目: 時計（本体の時刻。更新間隔ごとに描き直す）
     if (config.clockFormat != 0) {
         const double y = kTextTop + 3 * kTextLineHeight + 19;
-        pen.text(kPad, y, config.language == Language::Ja ? "現在時刻" : "Local time", 16, kTextMuted);
+        pen.text(kPad, y, uiText(config.language).clockLabel, 16, kTextMuted);
         pen.text(kWidth - kPad, y, localClock(config.clockFormat), 21, kText, true, true);
     }
 

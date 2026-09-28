@@ -33,35 +33,57 @@ struct Thresholds {
     double controllerCritPct = 10.0;
 };
 
-/**
- * アプリの設定一式。ファイルが無いときはこの既定値で動く。
- */
-enum class Attachment { Head, LeftWrist, RightWrist };
+/** 性能パネルをどこに固定するか。 */
+enum class Attachment {
+    Head,        ///< 頭（HMD）
+    LeftWrist,   ///< 左手のコントローラー
+    RightWrist,  ///< 右手のコントローラー
+};
 
+/**
+ * 手首（コントローラー）に固定するときの位置と向き。左右の手で別々に持つ。
+ * 位置はコントローラーから見た向き（右が +x、上が +y、手首側 = コントローラーの後ろが +z）。
+ * 向きは頭のパネルと同じ約束（パネル自身の軸で yaw → pitch → roll、正で面が右・上・面を見て反時計回り）で、
+ * 手首の上に寝かせた向きを pitch −90 として数える（wristTransform のコメントを参照）。
+ */
 struct WristPose {
-    double x = 0.0, y = 0.05, z = 0.08;  // Controller-local meters.
-    double pitch = -90.0, yaw = 0.0, roll = 0.0;  // Degrees; Rz * Ry * Rx.
-    bool operator!=(const WristPose& p) const {
-        return x != p.x || y != p.y || z != p.z || pitch != p.pitch || yaw != p.yaw || roll != p.roll;
+    double x = 0.0;       ///< 横（m、−0.5〜0.5）。右が +
+    double y = 0.05;      ///< 縦（m、−0.5〜0.5）。上が +
+    double z = 0.08;      ///< 前後（m、−0.5〜0.5）。手首側（コントローラーの後ろ）が +
+    double pitch = -90.0; ///< 上下の傾き（度、−180〜0）。−90 で手首の上に寝かせた向き。増やすと面がパネルの上側へ向く
+    double yaw = 0.0;     ///< 左右の向き（度、−180〜180）。正で面がパネルの右側へ向く
+    double roll = 0.0;    ///< 画面内の回転（度、−180〜180）。正で面を見て反時計回り
+
+    /**
+     * どれか 1 つでも違うか。
+     * @param other 比べる相手
+     * @return 違えば true
+     */
+    bool operator!=(const WristPose& other) const {
+        return x != other.x || y != other.y || z != other.z || pitch != other.pitch || yaw != other.yaw ||
+               roll != other.roll;
     }
 };
 
+/**
+ * アプリの設定一式。ファイルが無いときはこの既定値で動く。
+ */
 struct Config {
-    Attachment attachment = Attachment::Head;
-    WristPose leftWrist, rightWrist;
-    bool wristFade = true;
-    double wristFadeEndDeg = 75.0;  // Smooth fade across the preceding 30 degrees.
-    int clockFormat = 24;  // 0 = hidden, 12 or 24; headset local time.
-
     bool visible = true;            ///< false でパネルを隠す（読み取りと描画も止める）
     bool updateCheck = true;        ///< false で新しい版の自動確認を止める（手動の［確認］は常に使える）
     Language language = systemLanguage();  ///< 画面の文言の言語（"ja" / "en"。既定は Frame のシステム言語）
+    Attachment attachment = Attachment::Head;  ///< パネルの固定先（頭・左手・右手）
     double posX = -0.15;            ///< HMD 基準の位置（m）。右が +x
     double posY = -0.12;            ///< 上が +y
     double posZ = -0.50;            ///< 前が -z
     double yawDeg = 0.0;            ///< 左右の向き（度）。正でパネルの面が右（+x）を向く（-180〜180）
     double pitchDeg = 0.0;          ///< 上下の傾き（度）。正でパネルの面が上（+y）を向く（-90〜90）
     double rollDeg = 0.0;           ///< 画面内の回転（度）。正で面の側から見て反時計回り（-180〜180）
+    WristPose leftWrist;            ///< 左手に固定するときの位置と向き
+    WristPose rightWrist;           ///< 右手に固定するときの位置と向き
+    bool wristFade = true;          ///< 手首のとき、パネルの面が目から外れるほど薄くして消す
+    double wristFadeEndDeg = 75.0;  ///< 消えきる角度（度、35〜90）。その 30° 手前から薄くなり始める
+    int clockFormat = 24;           ///< 性能パネルの時計（0 = 出さない、12 = 12 時間制、24 = 24 時間制。本体の時刻）
     double widthM = 0.20;           ///< パネルの幅（m）
     double alpha = 0.9;             ///< パネル全体の不透明度（0〜1）
     int updateIntervalMs = 500;     ///< 更新間隔（ms）
@@ -76,8 +98,26 @@ struct Config {
  * @return 設定ファイルのパス
  */
 std::string defaultConfigPath();
+
+/**
+ * 設定ファイルに書く固定先の名前。
+ * @param attachment 固定先
+ * @return "head" / "left_wrist" / "right_wrist"
+ */
 const char* attachmentName(Attachment attachment);
+
+/**
+ * 今の固定先の手首の位置と向き（固定先が頭のときは左手のもの。呼ぶ側で頭かどうかを見ること）。
+ * @param config 設定
+ * @return 左手か右手の WristPose
+ */
 WristPose& selectedWrist(Config& config);
+
+/**
+ * 今の固定先の手首の位置と向き（読むだけ）。
+ * @param config 設定
+ * @return 左手か右手の WristPose
+ */
 const WristPose& selectedWrist(const Config& config);
 
 /**
@@ -102,16 +142,26 @@ bool loadConfig(const std::string& path, Config& out, std::vector<std::string>& 
 bool saveConfig(const std::string& path, const Config& config, std::string& error);
 
 /**
- * 表示まわり（表示の有無・位置・向き・幅・透明度）だけ既定値に戻す。言語・しきい値・フォントはそのまま。
+ * 表示まわり（表示の有無・固定先・位置・向き・両手の位置と向き・傾けると消す・時計・幅・透明度）だけ既定値に戻す。
+ * 言語・しきい値・フォントはそのまま。
  * @param config 書き換える設定
  */
 void resetDisplaySettings(Config& config);
 
 /**
- * パネルの回転行列（HMD 基準）を作る。性能パネルの変換は「位置 × この回転」。
- * パネル自身の軸で見て yaw → pitch → roll の順に回す（内因的な Y-X-Z の順）。
+ * 回転行列を作る。パネル自身の軸で見て yaw → pitch → roll の順に回す（内因的な Y-X-Z の順）。
  * 行列では R = Ry(yaw) · Rx(−pitch) · Rz(roll)（右手系、列ベクトル）。pitch だけ符号を反転しているのは、
- * 設定の pitch を「正で面が上を向く」にそろえるため（X 軸まわりの右手の回転は正で面が下を向く）。
+ * pitch を「正で面が上を向く」にそろえるため（X 軸まわりの右手の回転は正で面が下を向く）。
+ * 回転なしのとき、パネルの表（+z 側）は親の +z を向く。頭のパネルと手首のパネル（wristTransform）で共通に使う。
+ * @param yawDeg 左右の向き（度）。正で面が +x へ
+ * @param pitchDeg 上下の傾き（度）。正で面が +y へ
+ * @param rollDeg 画面内の回転（度）。正で面を見て反時計回り
+ * @param r 書き込み先（r[行][列]）
+ */
+void panelRotation(double yawDeg, double pitchDeg, double rollDeg, double r[3][3]);
+
+/**
+ * 頭のパネルの回転行列（HMD 基準）を作る。性能パネルの変換は「位置 × この回転」。
  * 回転なしのとき、パネルの表（+z 側）は頭の方（HMD の +z = 後ろ）を向く。
  * @param config 設定（yawDeg / pitchDeg / rollDeg を使う）
  * @param r 書き込み先（r[行][列]）
