@@ -17,8 +17,8 @@ fi
 # vendor/frame-updater/ が手で書き換えられていないか確かめる（frame-updater が隣にあれば元とのずれも見る）
 sh vendor/frame-updater/verify.sh
 
-# 開発用の build/ とは別のフォルダで、Release でビルドし直す
-cmake -G Ninja -S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Release
+# 開発用の build/ とは別のフォルダで、Release でビルドし直す（テストは開発用の build/ で ctest する。ここでは作らない）
+cmake -G Ninja -S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
 cmake --build "$build_dir" --clean-first
 
 version="$("$build_dir/$name" --version | awk '{print $2}')"

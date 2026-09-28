@@ -1,17 +1,31 @@
-## 0.1.0-tai.2 (local branch, 2026-09-27)
-
-- Retry rejected opacity/show/hide operations instead of caching them as successful; retries also run in head mode. Defer revealing a hidden panel until its opacity was accepted.
-- Start wrist fade timing from zero on attachment changes and after tracking or visibility returns, preventing an old head-mode interval from skipping the fade-in.
-- Add regression tests for transient/repeated API failures, wrist switching and reappearance after a long pause.
-
-## 0.1.0-tai.1 (local branch, 2026-09-27)
-
-- Add local-time clock with Off / 12h / 24h controls.
-- Add Head / Left wrist / Right wrist attachment, independent wrist offsets and Euler rotations.
-- Add adjustable view-angle fade with temporal smoothing and immediate hiding on tracking loss.
-- Add English/Japanese wrist settings page and CTest coverage for geometry, tracking, configuration, clock and controls.
-
 # 変更履歴
+
+## 未リリース
+
+### 手首への固定と時計（TaiKeid さんの PR #1）
+
+- 性能パネルを左手・右手のコントローラーに腕時計のように付けられるようにした。設定パネルの「位置」のカードのいちばん上に「固定先」（頭 / 左手 / 右手）を足した。左右の手は、それぞれの位置と向きを覚えている。設定ファイルに `attachment`（`"head"` / `"left_wrist"` / `"right_wrist"`、既定 `"head"`）と `left_wrist` / `right_wrist`（`x` / `y` / `z` / `yaw` / `pitch` / `roll`）を足した。今までの設定ファイルはそのまま使える
+- 位置と向きのボタンは、どこに固定していても同じカードの同じボタンで、選んでいる固定先のものを動かす（別の画面は作らない）。手のときは、微調整の十字がコントローラーから見た向きに 1cm ずつ（±50cm まで）、「近く / 遠く」の場所のボタンが「手首側 / 先端側」、位置のボタンが「手首の標準の位置」（コントローラーの上に寝かせて 5cm 上・8cm 手首側）になる
+- 手の向きの約束は頭のパネルとそろえた: パネル自身の軸で yaw → pitch → roll、「↑ 上向き」で面がパネルの上側へ、「右向き →」で右側へ、「左に回す」で面を見て反時計回り。コントローラーの上に寝かせた向きを `pitch` −90 として数え（既定）、そこから上下 ±90°（`pitch` −180〜0）まで。寝かせた向きのまわりで回すので、左右・上下・回転がそれぞれ別の軸で効く
+- 手に付けたとき、パネルの面が目の方から外れるほど薄くして消す（「傾けると消す」、既定オン）。消えきる角度は「消える角度」で 35〜90° の間で 5° ずつ変えられ、その 30° 手前から薄くなり始める（既定 45〜75°）。設定ファイルの `wrist_fade`・`wrist_fade_end_deg`。薄くなり方は時定数 80ms でなめらかにする
+- コントローラーか本体のトラッキングが外れたら、フェードを待たずにすぐ隠す。戻ったら 0 から薄く出す
+- 性能パネルのいちばん下の行に時計（本体の時刻）を足した。設定パネルの「パネル」のカードの「時計」でオフ / 12h / 24h を選ぶ（既定 24h）。設定ファイルの `clock_format`（`0` / `12` / `24`）。そのためパネルの縦横比が 512×434 から 512×460 になった
+- OpenVR が透明度・表示・置き場所の変更を断ったときは、うまくいったことにせず、少しあとにやり直す（頭のときも）。透明度を断られたときは、古い透明度のままパネルを出さない
+- 「既定に戻す」で、固定先・両手の位置と向き・傾けると消す・時計も既定に戻す
+
+### 設定パネル
+
+- 設定パネルを 1600×738 にした（前は 1600×690）。3 つのカードを同じ高さの 5 段にそろえ、「パネル」に時計の行、「位置」に固定先の行を足した。手のときは「向き」のいちばん下の段が「自分に向ける / 正面向き」から「傾けると消す」「消える角度」に変わる
+- 3 択のセグメント切り替え（固定先・時計）を足した。2 択と同じ見た目（選択中はアクセントの塗り ＋ ✓）
+
+### CPU
+
+- 手に付けているときは、パネルの見え方を確かめる間隔を、薄くなっている途中（角度がフェードの範囲に入っている間も）は 1/30 秒、見えきっている・消えきっているときは 0.1 秒にした。ほかの用事で起きたついでに済ませ、設定パネルのイベントは 0.5 秒おきと設定パネルが見えている間だけ見る。コントローラーの番号（役割から引く）は 1 秒ごとに聞き直す。作者の Frame で、左手に付けて 0.8% ほど（頭と同じくらい）
+
+### そのほか
+
+- テストを足した（`ctest --test-dir build`）: 手首の位置と向きの計算、頭と手で向きの約束が同じこと、頭と手の回転が互いに影響しないこと、フェードと確かめる間隔、断られた操作のやり直し、時計、設定ファイルの読み書き、設定パネルのボタンの当たり判定と見た目のずれ。`scripts/package.sh` のリリースのビルドではテストを作らない（`-DBUILD_TESTING=OFF`）
+- README の画像（性能パネル・警告の色・設定パネル、日英）を時計つきで撮り直した
 
 ## 0.2.0 — 2026-09-27
 

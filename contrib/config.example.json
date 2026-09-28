@@ -2,12 +2,14 @@
   "visible": true,
   "update_check": true,
   "language": "ja",
-  "position": {
-    "x": -0.15,
-    "y": -0.12,
-    "z": -0.5
-  },
+  "attachment": "head",
+  "position": { "x": -0.15, "y": -0.12, "z": -0.5 },
   "rotation": { "yaw": 0, "pitch": 0, "roll": 0 },
+  "left_wrist": { "x": 0, "y": 0.05, "z": 0.08, "pitch": -90, "yaw": 0, "roll": 0 },
+  "right_wrist": { "x": 0, "y": 0.05, "z": 0.08, "pitch": -90, "yaw": 0, "roll": 0 },
+  "wrist_fade": true,
+  "wrist_fade_end_deg": 75,
+  "clock_format": 24,
   "width_m": 0.2,
   "alpha": 0.9,
   "update_interval_ms": 500,
@@ -35,25 +37,5 @@
     "wifi_crit_dbm": -78,
     "controller_warn_pct": 20,
     "controller_crit_pct": 10
-  },
-  "attachment": "head",
-  "left_wrist": {
-    "x": 0,
-    "y": 0.05,
-    "z": 0.08,
-    "pitch": -90,
-    "yaw": 0,
-    "roll": 0
-  },
-  "right_wrist": {
-    "x": 0,
-    "y": 0.05,
-    "z": 0.08,
-    "pitch": -90,
-    "yaw": 0,
-    "roll": 0
-  },
-  "wrist_fade": true,
-  "wrist_fade_end_deg": 75,
-  "clock_format": 24
+  }
 }

@@ -38,7 +38,7 @@ add_executable(frame-perf-overlay
 target_include_directories(frame-perf-overlay PRIVATE third_party/openvr vendor/frame-updater/cpp)
 target_compile_options(frame-perf-overlay PRIVATE -Wall -Wextra)
 # --version で出すバージョン（上の project(VERSION) から）
-target_compile_definitions(frame-perf-overlay PRIVATE FRAME_PERF_OVERLAY_VERSION="${PROJECT_VERSION}-tai.2")
+target_compile_definitions(frame-perf-overlay PRIVATE FRAME_PERF_OVERLAY_VERSION="${PROJECT_VERSION}")
 target_link_libraries(frame-perf-overlay PRIVATE
   PkgConfig::CAIRO
   PkgConfig::FREETYPE
@@ -56,11 +56,21 @@ set_target_properties(frame-perf-overlay PROPERTIES
 
 install(TARGETS frame-perf-overlay RUNTIME DESTINATION bin)
 
+# テスト（手首への固定の計算・時計・設定ファイル・設定パネルの当たり判定）。ctest --test-dir build で動かす。
+# リリースのビルド（scripts/package.sh）は -DBUILD_TESTING=OFF でテストを作らない
 include(CTest)
 if(BUILD_TESTING)
   add_executable(wrist-clock-test
-    tests/wrist_clock_test.cpp src/placement.cpp src/clock.cpp src/config.cpp src/json.cpp
-    src/settings_panel.cpp src/draw.cpp src/i18n.cpp src/theme.cpp)
+    tests/wrist_clock_test.cpp
+    src/placement.cpp
+    src/clock.cpp
+    src/config.cpp
+    src/json.cpp
+    src/settings_panel.cpp
+    src/draw.cpp
+    src/i18n.cpp
+    src/theme.cpp
+  )
   target_include_directories(wrist-clock-test PRIVATE src third_party/openvr vendor/frame-updater/cpp)
   target_compile_options(wrist-clock-test PRIVATE -Wall -Wextra)
   target_link_libraries(wrist-clock-test PRIVATE PkgConfig::CAIRO PkgConfig::FREETYPE)
