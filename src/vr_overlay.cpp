@@ -3,7 +3,6 @@
 
 #include "openvr.h"
 #include "placement.h"
-#include <cmath>
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -34,6 +33,10 @@ constexpr uint32_t kMaxTimings = 256;
 constexpr int kShutdownWaitMs = 400;
 // --verbose の向きの確かめを、変換を渡してから何秒後にするか
 constexpr double kFacingCheckDelaySec = 0.5;
+// 性能パネルの透明度・表示・変換を断られたとき、やり直すまでの秒数
+constexpr double kPlacementRetrySec = 0.1;
+// 手首に固定しているコントローラーの番号（役割から引く）を聞き直す間隔（秒）
+constexpr double kWristRoleCheckSec = 1.0;
 
 /**
  * 単調増加の時計で今の時刻を秒で返す。
@@ -152,11 +155,14 @@ VrOverlay::ConnectResult VrOverlay::connect(int panelWidth, int panelHeight, int
         return ConnectResult::Error;
     }
     panelHandle_ = handle;
+    // 置き場所と見え方の状態は、つなぎ直すたびに最初から（新しいオーバーレイには何も渡していない）
     attachedDevice_ = vr::k_unTrackedDeviceIndexInvalid;
     transformDirty_ = true;
-    wristFade_ = WristFadeState{};
-    presentation_ = PanelPresentationState{};
-    placementRetryPending_ = false;
+    wristFade_ = WristFadeState {};
+    presentation_ = PanelPresentationState {};
+    nextPlacementAt_ = std::numeric_limits<double>::infinity();
+    wristDevice_ = vr::k_unTrackedDeviceIndexInvalid;
+    wristDeviceCheckedAt_ = -1.0;
 
     // 3) Vulkan と性能パネルのテクスチャ
     std::string vkMessage;
@@ -276,10 +282,12 @@ void VrOverlay::shutdown() {
 
 void VrOverlay::applyConfig(const Config& config) {
     if (!connected_ || panelHandle_ == 0) return;
-    checkOverlay("SetOverlayWidthInMeters", vr::VROverlay()->SetOverlayWidthInMeters(panelHandle_, config.widthM));
+    checkOverlay("SetOverlayWidthInMeters",
+                 vr::VROverlay()->SetOverlayWidthInMeters(panelHandle_, static_cast<float>(config.widthM)));
     transformDirty_ = true;
     updatePlacement(config, nowSeconds());
-    // The head-facing diagnostic is only meaningful for an HMD-relative panel.
+    // 変換を渡した直後に交差を聞くと、SteamVR はまだ前の変換で答える（実機で確かめた）ので、少し待ってから聞く。
+    // 確かめるのは頭に固定しているときだけ（頭の中心から見た向きを計算するため）
     facingCheckAt_ = 0;
     if (verbose_ && config.attachment == Attachment::Head) {
         facingCheckConfig_ = config;
@@ -287,27 +295,46 @@ void VrOverlay::applyConfig(const Config& config) {
     }
 }
 
+uint32_t VrOverlay::wristDeviceIndex(bool left, double now) {
+    // 役割（左手・右手）の番号を聞くのは IPC なので、毎回は聞かない。手を替えたときと 1 秒ごと（コントローラーが
+    // つなぎ直されて番号が変わっても 1 秒以内に追いつく）だけ聞き直す。隠すのは姿勢で決めるので、ここは待たない
+    if (left != wristDeviceLeft_ || wristDeviceCheckedAt_ < 0 || now - wristDeviceCheckedAt_ >= kWristRoleCheckSec) {
+        wristDevice_ = vr::VRSystem()->GetTrackedDeviceIndexForControllerRole(
+            left ? vr::TrackedControllerRole_LeftHand : vr::TrackedControllerRole_RightHand);
+        wristDeviceLeft_ = left;
+        wristDeviceCheckedAt_ = now;
+    }
+    return wristDevice_;
+}
+
 void VrOverlay::updatePlacement(const Config& config, double now) {
-    if (!connected_ || panelHandle_ == 0) return;
-    auto* overlay = vr::VROverlay();
+    if (!connected_ || panelHandle_ == 0) {
+        nextPlacementAt_ = std::numeric_limits<double>::infinity();
+        return;
+    }
+    vr::IVROverlay* overlay = vr::VROverlay();
     const bool wrist = config.attachment != Attachment::Head;
-    auto device = vr::k_unTrackedDeviceIndex_Hmd;
+    vr::TrackedDeviceIndex_t device = vr::k_unTrackedDeviceIndex_Hmd;
     bool tracked = true;
     double target = 1.0;
-    vr::HmdMatrix34_t transform{};
+    vr::HmdMatrix34_t transform {};
     if (wrist) {
-        device = vr::VRSystem()->GetTrackedDeviceIndexForControllerRole(
-            config.attachment == Attachment::LeftWrist ? vr::TrackedControllerRole_LeftHand : vr::TrackedControllerRole_RightHand);
+        // コントローラー基準の変換。見せる割合は、コントローラーと頭の今の姿勢から、面が目の方を向いている度合いで決める
+        device = wristDeviceIndex(config.attachment == Attachment::LeftWrist, now);
         transform = wristTransform(selectedWrist(config));
-        vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount]{};
-        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, poses, vr::k_unMaxTrackedDeviceCount);
-        const auto& head = poses[vr::k_unTrackedDeviceIndex_Hmd];
+        vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount] {};
+        vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, poses,
+                                                        vr::k_unMaxTrackedDeviceCount);
         tracked = wristTrackingValid(device, poses);
         if (tracked && config.wristFade) {
             target = wristFacingAlpha(composeTransform(poses[device].mDeviceToAbsoluteTracking, transform),
-                                      head.mDeviceToAbsoluteTracking, config.wristFadeEndDeg);
+                                      poses[vr::k_unTrackedDeviceIndex_Hmd].mDeviceToAbsoluteTracking,
+                                      config.wristFadeEndDeg);
         }
     } else {
+        // HMD 基準の変換 = 位置 × 回転（3×4 の左 3 列が回転、右端の列が位置）。
+        // 回転はパネル自身の軸で yaw → pitch → roll の順（panelRotation のコメントを参照）。
+        // オーバーレイは +z 側が表。回転なしなら表は頭の方（HMD の +z）を向き、パネルは顔の正面と平行になる
         double rotation[3][3];
         panelRotation(config, rotation);
         const double position[3] = {config.posX, config.posY, config.posZ};
@@ -316,22 +343,22 @@ void VrOverlay::updatePlacement(const Config& config, double now) {
             transform.m[row][3] = static_cast<float>(position[row]);
         }
     }
-    const bool changedDevice = attachedDevice_ != device;
-    placementRetryPending_ = false;
-    if (tracked && config.visible) {
-        if (transformDirty_ || changedDevice) {
-            const auto error = overlay->SetOverlayTransformTrackedDeviceRelative(panelHandle_, device, &transform);
-            checkOverlay("SetOverlayTransformTrackedDeviceRelative", error);
-            if (error != vr::VROverlayError_None) {
-                tracked = false;
-                placementRetryPending_ = true;
-            }
-            else { attachedDevice_ = device; transformDirty_ = false; }
+    bool retry = false;
+    if (tracked && config.visible && (transformDirty_ || attachedDevice_ != device)) {
+        const vr::EVROverlayError error = overlay->SetOverlayTransformTrackedDeviceRelative(panelHandle_, device, &transform);
+        if (checkOverlay("SetOverlayTransformTrackedDeviceRelative", error)) {
+            attachedDevice_ = device;
+            transformDirty_ = false;
+        } else {
+            // 置き場所を渡せなかったパネルは出さない（前の場所に残さない）。次の呼び出しでやり直す
+            tracked = false;
+            retry = true;
         }
     }
-    // Tracking loss hides immediately: never leave a stale wrist panel floating in space.
-    const double alpha = config.alpha * wristFade_.update(wrist, tracked && config.visible, device, target, now);
-    const bool retryPresentation = presentation_.apply(alpha,
+    // トラッキングが外れたら、フェードを待たずにすぐ隠す（止まったコントローラーの位置にパネルを浮かせたままにしない）
+    const double shown = wristFade_.update(wrist, tracked && config.visible, device, target, now);
+    retry |= presentation_.apply(
+        config.alpha * shown,
         [&](double value) {
             return checkOverlay("SetOverlayAlpha", overlay->SetOverlayAlpha(panelHandle_, static_cast<float>(value)));
         },
@@ -339,7 +366,12 @@ void VrOverlay::updatePlacement(const Config& config, double now) {
             return checkOverlay(show ? "ShowOverlay" : "HideOverlay",
                                 show ? overlay->ShowOverlay(panelHandle_) : overlay->HideOverlay(panelHandle_));
         });
-    placementRetryPending_ |= retryPresentation;
+    // 次に確かめる時刻: 断られた操作があれば少し後にやり直す。手首を出している間はフェードの途中なら細かく、
+    // 見えきっている・消えきっているなら粗く（トラッキングが外れたのに気づくのもこの間隔）。頭で問題なければ呼ばない
+    double interval = std::numeric_limits<double>::infinity();
+    if (wrist && config.visible) interval = wristPollInterval(shown, tracked ? target : 0.0);
+    if (retry) interval = std::min(interval, kPlacementRetrySec);
+    nextPlacementAt_ = now + interval;
 }
 
 void VrOverlay::logFacingCheck(const Config& config) const {
