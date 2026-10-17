@@ -1,4 +1,4 @@
-// Synthetic /proc/stat files only; no device or host sensor access.
+// センサーのテスト。作り物の /proc/stat などだけを使い、機器や PC のセンサーには触らない。
 #include "sensors.h"
 
 #include <unistd.h>
@@ -13,7 +13,7 @@ struct SensorsTestAccess {
     static void setStat(Sensors& sensors, int fd) { sensors.procStat_.fd = ::dup(fd); }
     static void setPowerSources(Sensors& sensors, int mainFd, int otherFd) {
         sensors.powers_ = {{"", "max34417_10/vph", ::dup(mainFd)}, {"", "max34417_11/apc0", ::dup(otherFd)}};
-        // The test exercises only synthetic power files, never actual networking or /proc.
+        // 作り物の電力ファイルだけを読み、本物の無線や /proc は読まない
         sensors.lastWifiRead_ = sensors.lastGpuRead_ = std::numeric_limits<double>::max();
     }
     static void refreshPower(Sensors& sensors) { sensors.lastPowerRead_ = -1; }
@@ -69,7 +69,7 @@ void usageAndTopology() {
     auto sample = SensorsTestAccess::cpu(sensors);
     check(std::isnan(sample.cpuUsagePct) && std::isnan(sample.cpuMaxCorePct), "first sample needs a baseline");
 
-    // Guest counters are already included in user/nice and must not be counted twice.
+    // guest は user / nice に含まれているので 2 回数えない
     const std::string second = "cpu 250 10 20 850 50 5 15 0 100000 100000\n"
                                "cpu0 150 5 10 400 25 2 8 0 100000 100000\n"
                                "cpu1 100 5 10 450 25 3 7 0 0 0\n";
@@ -81,7 +81,7 @@ void usageAndTopology() {
     near(sample.cpuUsagePct, 0);
     near(sample.cpuMaxCorePct, 0);
 
-    // A changed CPU count needs a fresh baseline rather than mixing different rows.
+    // CPU の数が変わったら、違う行どうしを比べずに基準を取り直す
     stat.write("cpu 150 5 10 400 25 2 8 0\ncpu0 150 5 10 400 25 2 8 0\n");
     sample = SensorsTestAccess::cpu(sensors);
     check(std::isnan(sample.cpuUsagePct) && std::isnan(sample.cpuMaxCorePct), "CPU hotplug needs a baseline");
@@ -156,7 +156,7 @@ void optionalPowerChannels() {
     near(sample.powerSumW, 17);
     check(sample.powerChannels.empty(), "aggregate-only read copied power diagnostics");
 
-    // Skipping the result copy must preserve the cache for subsequent diagnostic reads.
+    // 結果へのコピーを省いても、あとで個別の値を読むためのキャッシュは残す
     mainRail.write("14500000\n");
     SensorsTestAccess::freezePower(sensors);
     sample = sensors.read();

@@ -660,8 +660,7 @@ void SettingsPanel::placeFooterButton(SettingsAction action, double x, double y,
 
 void SettingsPanel::drawSegmented(const Pen& pen, const UiText& text, std::initializer_list<SettingsAction> actions,
                                   int selected, bool usable) const {
-    // Every segment in this panel has two or three choices. Keep the small list on
-    // the stack instead of allocating a vector for each segmented control/redraw.
+    // このパネルの切り替えはどれも 2〜3 択なので、描くたびに vector を確保せず小さな配列に並べる
     if (actions.size() == 0 || actions.size() > 3) return;
     std::array<const Button*, 3> parts {};
     size_t count = 0;

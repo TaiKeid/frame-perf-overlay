@@ -1,4 +1,4 @@
-// Regression tests for moving local-transform work out of the wrist poll loop.
+// 機器基準の変換を手首の確認のたびではなく設定の反映時に作るようにした変更の回帰テスト。
 #include "vr_overlay.h"
 
 #include <cstdio>
@@ -13,7 +13,7 @@ void check(bool condition, const char* message) {
     }
 }
 
-// The pre-cache head path, retained here to compare all float components exactly.
+// 作り置きにする前の頭固定の計算。float の全成分が完全に一致するか比べるために残す
 vr::HmdMatrix34_t headReference(const Config& config) {
     double rotation[3][3];
     panelRotation(config, rotation);

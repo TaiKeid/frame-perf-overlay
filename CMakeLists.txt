@@ -37,7 +37,7 @@ add_executable(frame-perf-overlay
 )
 target_include_directories(frame-perf-overlay PRIVATE third_party/openvr vendor/frame-updater/cpp)
 target_compile_options(frame-perf-overlay PRIVATE -Wall -Wextra)
-# Release builds keep exceptions and normal floating-point semantics.
+# Release の最適化。例外や浮動小数点の扱いは変えない（OFF にすると速さ優先の -O3 ＋ LTO）
 option(FRAME_PERF_OPTIMIZE_SIZE "Optimize the release overlay for installed size" ON)
 if(FRAME_PERF_OPTIMIZE_SIZE)
   target_compile_options(frame-perf-overlay PRIVATE $<$<CONFIG:Release>:-Os>)

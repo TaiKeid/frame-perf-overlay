@@ -1,4 +1,4 @@
-// Synthetic DRM fdinfo files and symlinks; no actual /proc or GPU access.
+// GPU 使用率のテスト。作り物の DRM fdinfo とシンボリックリンクだけを使い、本物の /proc や GPU には触らない。
 #include "gpu_usage.h"
 
 #include <unistd.h>
@@ -58,11 +58,11 @@ void scanReuseAndCounterReset() {
     ProcTree proc;
     GpuUsage gpu;
     proc.write("4", 7, 100000000);
-    proc.write("5", 7, 100000000);  // A dup must not count the same client twice.
+    proc.write("5", 7, 100000000);  // dup された fd で同じクライアントを 2 回数えない
     GpuUsageTestAccess::scan(gpu, proc.root, 0);
     check(gpu.clientCount() == 1, "duplicate client counted twice");
 
-    // The scan already sampled the fdinfo. Removing it proves update reuses that read.
+    // 走査のときに fdinfo は読んである。消しても値が出れば、update が読み直していないと分かる
     std::filesystem::remove(proc.path("4"));
     std::filesystem::remove(proc.path("5"));
     check(std::isnan(gpu.update(0)), "first GPU sample needs elapsed time");
@@ -71,7 +71,7 @@ void scanReuseAndCounterReset() {
     proc.write("5", 7, 300000000);
     near(gpu.update(2), 10);
 
-    // Rescanning known clients preserves their baseline; unchanged work is zero.
+    // 知っているクライアントを走査し直しても前回の値は引き継ぐ（働いていなければ 0）
     GpuUsageTestAccess::scan(gpu, proc.root, 4);
     near(gpu.update(4), 0);
     proc.write("4", 7, 100000000);
@@ -94,7 +94,7 @@ void dormantAndSaturation() {
     proc.write("4", 9, 500000000);
     check(std::isnan(gpu.update(2)), "dormant client should wait for the next scan");
     GpuUsageTestAccess::scan(gpu, proc.root, 4);
-    near(gpu.update(4), 0);  // Do not charge work accumulated while dormant to one interval.
+    near(gpu.update(4), 0);  // 読んでいなかった間にたまった分を 1 回の間隔に押しつけない
     proc.write("4", 9, 900000000);
     near(gpu.update(6), 20);
     proc.write("4", 9, 9900000000);

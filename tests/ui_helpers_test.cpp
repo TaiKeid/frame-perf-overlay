@@ -1,4 +1,4 @@
-// Exact pixel conversion and settings-file regression tests. No SteamVR/device required.
+// 画素の変換が完全に一致するかと、設定ファイルの回帰テスト（SteamVR や機器は要らない）。
 #include "config.h"
 #include "draw.h"
 #include "json.h"
@@ -18,7 +18,7 @@
 namespace {
 #define CHECK(expr) do { if (!(expr)) throw std::runtime_error(#expr); } while (false)
 
-// The previous conversion algorithm, retained here as an independent reference.
+// 前の変換のやり方。比べる基準として、本体とは別にここに残す
 void referenceRgba(cairo_surface_t* surface, std::vector<uint8_t>& out) {
     static const auto table = [] {
         std::vector<uint8_t> values(256 * 256);
@@ -48,8 +48,7 @@ void referenceRgba(cairo_surface_t* surface, std::vector<uint8_t>& out) {
     }
 }
 
-// Direct integer arithmetic is the accuracy oracle, independently of either
-// conversion implementation's lookup table or fast paths.
+// 正解は整数の割り算で直接出す（どちらの変換の表や近道にも頼らない）
 void expectedRgba(cairo_surface_t* surface, std::vector<uint8_t>& out) {
     cairo_surface_flush(surface);
     const int width = cairo_image_surface_get_width(surface), height = cairo_image_surface_get_height(surface);
@@ -73,8 +72,8 @@ void expectedRgba(cairo_surface_t* surface, std::vector<uint8_t>& out) {
 }
 
 void pixels() {
-    // Every channel/alpha combination, including invalid premultiplied channels
-    // (the public helper previously saturated these rather than wrapping them).
+    // 色と透明度の全組み合わせ。乗算済みとしてはありえない値も含める
+    // （前の変換もこれは折り返さず 255 で止めていた）
     cairo_surface_t* image = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 256, 256);
     CHECK(cairo_surface_status(image) == CAIRO_STATUS_SUCCESS);
     auto* data = reinterpret_cast<uint32_t*>(cairo_image_surface_get_data(image));
@@ -88,8 +87,8 @@ void pixels() {
     CHECK(actual == expected);
     cairo_surface_destroy(image);
 
-    // Exercise complete blocks, every tail length, poisoned row padding and
-    // buffer reuse. Rows cover opaque, zero-alpha with RGB, fractional and mixed blocks.
+    // 4 画素の塊、余りのすべての長さ、行末の詰め物（でたらめな値で埋める）、出力の使い回しを試す。
+    // 行は不透明・透明度 0 で色あり・半透明・混在の 4 種類
     constexpr int height = 4;
     const uint32_t fractional[] = {0x01010002, 0x7f7f20ff, 0xfe80fe40, 0x03030201};
     const uint32_t mixed[] = {0xff123456, 0x00123456, 0x807f4020, 0x0180ff02};
@@ -126,7 +125,7 @@ void configuration(const std::string& directory) {
     config.widthM = 0.4567; config.alpha = 0.7654;
     config.updateIntervalMs = 1234; config.graphSeconds = 123;
     config.fontPath = "Japanese-日本語\\font\".ttf";
-    // Every ASCII control character, including embedded NUL, must be escaped and round-trip.
+    // NUL を含む ASCII の制御文字はすべてエスケープして書き、読み戻して同じになること
     for (char c = 0; c < 32; ++c) config.boldFontPath += c;
     config.boldFontPath += "\\\"font.ttf";
     const struct { const char* name; double Thresholds::*member; double value; } fields[] = {
@@ -179,7 +178,7 @@ void configuration(const std::string& directory) {
     CHECK(loaded.fontPath == config.fontPath && loaded.boldFontPath == config.boldFontPath);
     for (const auto& field : fields) CHECK(loaded.thresholds.*field.member == field.value);
 
-    // A failed flush must preserve the original file and remove the temporary link.
+    // 書き込みに失敗したら、元のファイルを残して一時ファイル（ここではリンク）を消すこと
     CHECK(::symlink("/dev/full", (path + ".tmp").c_str()) == 0);
     loaded.alpha = 0.1;
     CHECK(!saveConfig(path, loaded, error));
@@ -187,7 +186,7 @@ void configuration(const std::string& directory) {
     CHECK(loadConfig(path, loaded, warnings, error) && loaded.alpha == config.alpha);
 }
 
-// Optional developer measurement; never a timing assertion in CTest.
+// 開発用の任意の計測（CTest では時間を判定しない）
 void benchmark() {
     const char* const kinds[] = {"opaque", "translucent", "opaque-with-edges", "transparent", "random-premultiplied"};
     for (const auto& dimensions : {std::pair<int, int>{512, 460}, {1600, 738}}) {
@@ -229,7 +228,7 @@ void benchmark() {
                 }
                 return std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count() / repeats;
             };
-            // Alternate order across five samples; report the median to reduce noise.
+            // 5 回、順番を入れ替えながら測り、ぶれを減らすため中央値を出す
             std::vector<double> oldTimes, newTimes;
             for (int sample = 0; sample < 5; ++sample) {
                 if (sample % 2 == 0) { oldTimes.push_back(measure(referenceRgba)); newTimes.push_back(measure(surfaceToRgba)); }
