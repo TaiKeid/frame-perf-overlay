@@ -6,7 +6,6 @@
 #include FT_FREETYPE_H
 
 #include <algorithm>
-#include <array>
 #include <cmath>
 #include <cstdio>
 
@@ -171,12 +170,15 @@ void drawDisc(cairo_t* cr, double cx, double cy, double r, Color c) {
 }
 
 void surfaceToRgba(cairo_surface_t* surface, std::vector<uint8_t>& out) {
-    // 24-bit reciprocal gives exactly (c * 255 + a / 2) / a for all 8-bit c/a.
-    // Unlike the former 64 KiB channel table, this is constant-initialized, needs no heap
-    // or startup divisions, and fits in 1 KiB. Opaque/transparent interiors skip it.
-    static constexpr auto reciprocal = [] {
-        std::array<uint32_t, 256> table {};
-        for (uint32_t a = 1; a < 256; ++a) table[a] = ((1u << 24) + a - 1) / a;
+    // Generate once in working memory, rather than storing 64 KiB in the executable.
+    // Lookup keeps fractional-alpha pixels fast; opaque/transparent interiors skip it.
+    static const auto channels = [] {
+        std::vector<uint8_t> table(256 * 256);
+        for (unsigned a = 1; a < 256; ++a) {
+            for (unsigned c = 0; c < 256; ++c) {
+                table[a * 256 + c] = static_cast<uint8_t>(std::min(255u, (c * 255 + a / 2) / a));
+            }
+        }
         return table;
     }();
 
@@ -200,13 +202,10 @@ void surfaceToRgba(cairo_surface_t* surface, std::vector<uint8_t>& out) {
             } else if (a == 0) {
                 dst[0] = dst[1] = dst[2] = 0;
             } else {
-                const auto channel = [a](uint32_t c) {
-                    const uint32_t value = static_cast<uint32_t>(((c * 255 + a / 2) * static_cast<uint64_t>(reciprocal[a])) >> 24);
-                    return static_cast<uint8_t>(std::min(255u, value));
-                };
-                dst[0] = channel((p >> 16) & 0xFF);
-                dst[1] = channel((p >> 8) & 0xFF);
-                dst[2] = channel(p & 0xFF);
+                const uint8_t* line = channels.data() + a * 256;
+                dst[0] = line[(p >> 16) & 0xFF];
+                dst[1] = line[(p >> 8) & 0xFF];
+                dst[2] = line[p & 0xFF];
             }
             dst[3] = static_cast<uint8_t>(a);
             dst += 4;
