@@ -275,6 +275,8 @@ Useful options (all of them work without SteamVR, except the last one):
 
 `--help` lists every option, including every `--preview-update` state. The version is set in `CMakeLists.txt` (`project(... VERSION ...)`) and shown by `--version`.
 
+Release builds use size optimization, section garbage collection and LTO when the compiler supports it. Set `-DFRAME_PERF_OPTIMIZE_SIZE=OFF` to use the compiler's ordinary speed optimization with LTO. Exceptions, floating-point rules and debug builds are unchanged. The tests include exact pixel-conversion and placement checks and synthetic CPU/GPU sensor files; `./build/ui-helpers-test --benchmark` compares conversion CPU time with the previous algorithm. Linux CI runs the tests on x64 and ARM64; its Ubuntu binaries are validation artifacts, not SteamOS releases.
+
 `vendor/frame-updater/` is a copy of a private, shared updater project (script, the C++ helper this app builds against, and the strings shown in the update bar). Don't edit it here — it's checked against its source by `scripts/package.sh`.
 
 ## Release (maintainer)

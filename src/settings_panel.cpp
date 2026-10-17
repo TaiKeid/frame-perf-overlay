@@ -752,7 +752,7 @@ void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsActio
 double SettingsPanel::drawHeader(const Pen& pen, const UiText& text, const Config& config) const {
     pen.text(kPad, centerBaseline(kHeaderY, kHeaderH, 34), text.settingsTitle, 34, kText, true);
     // 右上の状態のピル: 表示中は緑の塗り＋●＋文字、非表示は灰色の塗り＋○＋文字（色だけで伝えない）
-    const std::string label = config.visible ? text.panelShown : text.panelHidden;
+    const char* label = config.visible ? text.panelShown : text.panelHidden;
     const double size = 20;
     const double h = 42;
     const double y = kHeaderY + (kHeaderH - h) / 2;

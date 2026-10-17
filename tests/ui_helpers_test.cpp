@@ -116,6 +116,25 @@ void configuration(const std::string& directory) {
     std::string error;
     CHECK(saveConfig(path, config, error));
     CHECK(!std::filesystem::exists(path + ".tmp"));
+    FILE* file = std::fopen(path.c_str(), "rb");
+    CHECK(file != nullptr);
+    std::string source;
+    char buffer[1024];
+    size_t count;
+    while ((count = std::fread(buffer, 1, sizeof(buffer), file)) != 0) source.append(buffer, count);
+    CHECK(std::fclose(file) == 0);
+    for (unsigned c = 0; c < 32; ++c) {
+        char escaped[7];
+        std::snprintf(escaped, sizeof(escaped), "\\u%04x", c);
+        CHECK(source.find(escaped) != std::string::npos);
+    }
+    JsonValue json;
+    CHECK(parseJson(source, json, error));
+    CHECK(json.get("thresholds") != nullptr);
+    for (const auto& field : fields) {
+        const JsonValue* value = json.get("thresholds")->get(field.name);
+        CHECK(value != nullptr && value->isNumber() && value->number == field.value);
+    }
     Config loaded;
     std::vector<std::string> warnings;
     CHECK(loadConfig(path, loaded, warnings, error) && warnings.empty());
