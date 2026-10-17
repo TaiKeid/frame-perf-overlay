@@ -256,7 +256,7 @@ Build on the headset (the program links against SteamOS's cairo, FreeType, libnl
 ```sh
 cmake -G Ninja -S . -B build
 cmake --build build
-ctest --test-dir build --output-on-failure  # tests (wrist geometry, fade, clock, settings file, settings buttons)
+ctest --test-dir build --output-on-failure  # tests (wrist geometry, fade, clock, settings file, settings buttons, pixel conversion, sensors)
 ./install.sh               # installs build/frame-perf-overlay
 scripts/package.sh         # release build: dist/frame-perf-overlay-<version>.tar.gz, dist/SHA256SUMS
 ```
@@ -275,7 +275,7 @@ Useful options (all of them work without SteamVR, except the last one):
 
 `--help` lists every option, including every `--preview-update` state. The version is set in `CMakeLists.txt` (`project(... VERSION ...)`) and shown by `--version`.
 
-Release builds use size optimization, section garbage collection and LTO when the compiler supports it. Set `-DFRAME_PERF_OPTIMIZE_SIZE=OFF` to use the compiler's ordinary speed optimization with LTO. Exceptions, floating-point rules and debug builds are unchanged. The tests include exact pixel-conversion and placement checks and synthetic CPU/GPU sensor files; `./build/ui-helpers-test --benchmark` compares conversion CPU time with the previous algorithm. Linux CI runs the tests on x64 and ARM64; its Ubuntu binaries are validation artifacts, not SteamOS releases.
+Release builds use size optimization, section garbage collection and LTO when the compiler supports it. Set `-DFRAME_PERF_OPTIMIZE_SIZE=OFF` to use the compiler's ordinary speed optimization with LTO. Exceptions, floating-point rules and debug builds are unchanged. The tests include exact pixel-conversion and placement checks and synthetic CPU/GPU sensor files; `./build/ui-helpers-test --benchmark` compares conversion CPU time with the previous algorithm.
 
 `vendor/frame-updater/` is a copy of a private, shared updater project (script, the C++ helper this app builds against, and the strings shown in the update bar). Don't edit it here — it's checked against its source by `scripts/package.sh`.
 

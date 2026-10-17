@@ -256,7 +256,7 @@ systemctl --user enable frame-perf-overlay         # 自動起動を戻す
 ```sh
 cmake -G Ninja -S . -B build
 cmake --build build
-ctest --test-dir build --output-on-failure  # テスト（手首の位置と向き・フェード・時計・設定ファイル・設定パネルのボタン）
+ctest --test-dir build --output-on-failure  # テスト（手首の位置と向き・フェード・時計・設定ファイル・設定パネルのボタン・画素の変換・センサー）
 ./install.sh               # build/frame-perf-overlay を入れる
 scripts/package.sh         # リリース用にビルドして dist/frame-perf-overlay-<バージョン>.tar.gz と dist/SHA256SUMS を作る
 ```
@@ -274,6 +274,8 @@ scripts/package.sh         # リリース用にビルドして dist/frame-perf-o
 ```
 
 すべてのオプションは `--help` で見られます（`--preview-update` の状態の一覧も）。バージョンは `CMakeLists.txt` の `project(... VERSION ...)` で決まり、`--version` で表示されます。
+
+リリースのビルドは、サイズ優先の最適化・使わない部分の削除・LTO（コンパイラが対応していれば）を使います。`-DFRAME_PERF_OPTIMIZE_SIZE=OFF` にすると、ふつうの速さ優先の最適化（LTO つき）になります。例外や浮動小数点の扱い、デバッグビルドは変わりません。テストには、画素の変換と位置の計算を厳密に確かめるものと、作り物のファイルで CPU・GPU のセンサーを確かめるものがあります。`./build/ui-helpers-test --benchmark` で、変換の CPU 時間を前のやり方と比べられます。
 
 `vendor/frame-updater/` は、非公開の共通の更新の仕組み（スクリプト、このアプリがビルドする C++ の部品、更新の帯の文言）のコピーです。ここでは編集しないでください。`scripts/package.sh` が元とずれていないか確かめます。
 
