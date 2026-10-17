@@ -47,7 +47,7 @@ constexpr double kAccentTintAlpha = 0.20;             ///< アクセントの薄
 constexpr Color kAccentText = hexColor(0xf0c4fa);     ///< カードの上のピンクの文字（更新の帯の「新しい版があります」）
 // ---- 2 本目の線（GPU） ----
 constexpr Color kGpu = hexColor(0x58a6ff);            ///< GPU（使用率の塗り・GPU 温度の線・「GPU」の文字）
-constexpr double kGpuFillAlpha = 0.22;                ///< グラフの台の上の GPU 使用率の塗り
+constexpr double kGpuFillAlpha = 0.22;                ///< グラフの台の上の GPU 負荷の塗り
 constexpr Color kGpuFill = blendColor(kGpu, kBg, kGpuFillAlpha);
 // ---- 状態の色（色だけで伝えない。● や文字も付ける） ----
 constexpr Color kSuccess = hexColor(0x3fb950);        ///< パネル表示中

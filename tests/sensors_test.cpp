@@ -14,7 +14,7 @@ struct SensorsTestAccess {
     static void setPowerSources(Sensors& sensors, int mainFd, int otherFd) {
         sensors.powers_ = {{"", "max34417_10/vph", ::dup(mainFd)}, {"", "max34417_11/apc0", ::dup(otherFd)}};
         // 作り物の電力ファイルだけを読み、本物の無線や /proc は読まない
-        sensors.lastWifiRead_ = sensors.lastGpuRead_ = std::numeric_limits<double>::max();
+        sensors.lastWifiRead_ = std::numeric_limits<double>::max();
     }
     static void refreshPower(Sensors& sensors) { sensors.lastPowerRead_ = -1; }
     static void freezePower(Sensors& sensors) { sensors.lastPowerRead_ = std::numeric_limits<double>::max(); }

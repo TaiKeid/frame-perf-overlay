@@ -286,8 +286,8 @@ bool parseOptions(int argc, char** argv, Options& options) {
 void printSample(const SensorSample& s) {
     std::printf("  CPU    使用率 %s%%（最大コア %s%%） 最速クラスタ %sMHz  大コア %sMHz\n", fmt(s.cpuUsagePct, 1).c_str(),
                 fmt(s.cpuMaxCorePct, 1).c_str(), fmt(s.cpuFreqMHz, 0).c_str(), fmt(s.cpuBigFreqMHz, 0).c_str());
-    std::printf("  GPU    使用率 %s%%（目安）  %sMHz（最大 %sMHz）\n", fmt(s.gpuBusyPct, 1).c_str(),
-                fmt(s.gpuFreqMHz, 0).c_str(), fmt(s.gpuMaxFreqMHz, 0).c_str());
+    // GPU 負荷は SteamVR のフレーム計測から出すので、ここ（OpenVR なし）では出さない
+    std::printf("  GPU    %sMHz（最大 %sMHz）\n", fmt(s.gpuFreqMHz, 0).c_str(), fmt(s.gpuMaxFreqMHz, 0).c_str());
     std::printf("  温度   CPU %s℃  GPU %s℃  DDR %s℃  電池 %s℃\n", fmt(s.cpuTempC, 1).c_str(), fmt(s.gpuTempC, 1).c_str(),
                 fmt(s.ddrTempC, 1).c_str(), fmt(s.batteryTempC, 1).c_str());
     std::printf("         画面 %s℃  排気 %s℃  放熱 %s℃   熱制限 CPU %s / GPU %s\n", fmt(s.displayTempC, 1).c_str(),
@@ -366,6 +366,7 @@ FrameStats fakeFrameStats(double t, double fps) {
         f.gpuMs = 14.5 + 1.0 * std::sin(t * 1.3);
         f.reprojectedPct = 100.0 * (1.0 - fps / 90.0);
     }
+    f.gpuBusyPct = estimateGpuBusyPct(f.gpuMs, f.appFps);
     f.dropped = 0;
     return f;
 }
@@ -392,7 +393,6 @@ ControllerStatus fakeControllers(bool low) {
 void applyFakeWarnings(SensorSample& sample) {
     sample.throttleCpu = true;
     sample.throttleGpu = true;
-    sample.gpuBusyPct = 97.0;
     sample.cpuTempC = 86.0;
     sample.batteryPct = 12.0;
     sample.batteryStatus = "Discharging";
@@ -533,6 +533,7 @@ int runDumpPng(const Options& options) {
         const bool fake = options.fakeFrames || options.fakeWarnings || options.fakeFps > 0 || options.fakeThrottle;
         FrameStats frame = fake ? fakeFrameStats(t - start, options.fakeFps) : FrameStats();
         if (options.fakeThrottle) applyFakeThrottle(frame, t - start);
+        if (options.fakeWarnings) frame.gpuBusyPct = 97.0;  // 警告色の確認用
         SensorSample sample = sensors.read(false);
         if (options.fakeWarnings) applyFakeWarnings(sample);
         if (!options.fakeWifi.empty()) applyFakeWifi(sample, options.fakeWifi);
@@ -944,14 +945,14 @@ int runOverlay(const Options& options) {
                     lastVerbose = now;
                     std::fprintf(stderr,
                                  "[値] ループ %u 回 | fps %s frames=%u GPU %s/%sms CPU %s/%sms 目標 %sms(%sHz) 再投影 %s%% 落ち %u | "
-                                 "GPU使用率 %s%% CPU %s℃ GPU %s℃ vph %sW 熱制限 %d/%d | 無線 %s ↓%sMbps %sdBm | "
+                                 "GPU負荷 %s%% CPU %s℃ GPU %s℃ vph %sW 熱制限 %d/%d | 無線 %s ↓%sMbps %sdBm | "
                                  "コン L%s R%s | ダッシュボード %s 設定パネル %s | 送信 %s | CPU時間 ms: 読取 %.2f VR %.2f 描画 %.2f 変換 %.2f 送信 %.2f\n",
                                  loopCount, fmt(frame.appFps, 1).c_str(), frame.frames, fmt(frame.gpuMs, 2).c_str(),
                                  fmt(frame.gpuMaxMs, 2).c_str(),
                                  fmt(frame.cpuMs, 2).c_str(), fmt(frame.cpuMaxMs, 2).c_str(),
                                  fmt(frame.targetMs, 2).c_str(), fmt(frame.displayHz, 1).c_str(),
                                  fmt(frame.reprojectedPct, 1).c_str(), frame.dropped,
-                                 fmt(sample.gpuBusyPct, 1).c_str(), fmt(sample.cpuTempC, 1).c_str(),
+                                 fmt(frame.gpuBusyPct, 1).c_str(), fmt(sample.cpuTempC, 1).c_str(),
                                  fmt(sample.gpuTempC, 1).c_str(), fmt(sample.powerMainW, 2).c_str(),
                                  sample.throttleCpu ? 1 : 0, sample.throttleGpu ? 1 : 0,
                                  !sample.wifi.connected ? "未接続" : (sample.wifi.homeWifi ? "Wi-Fi" : "直通"),

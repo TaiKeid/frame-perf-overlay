@@ -623,6 +623,7 @@ FrameStats VrOverlay::readFrameStats() {
         stats.reprojectedPct = window.reprojectedPct;
         stats.dropped = window.dropped;
         stats.throttledFrames = window.throttledFrames;
+        if (stats.haveTimes) stats.gpuBusyPct = estimateGpuBusyPct(stats.gpuMs, stats.appFps);
     }
     return stats;
 }

@@ -25,7 +25,7 @@ struct Thresholds {
     double powerCritW = 16.0;
     double cpuWarnPct = 85.0;      ///< CPU 使用率（最も忙しいコア、%）
     double cpuCritPct = 97.0;
-    double gpuWarnPct = 85.0;      ///< GPU 使用率の目安（%）
+    double gpuWarnPct = 85.0;      ///< GPU 負荷の目安（%）
     double gpuCritPct = 95.0;
     double wifiWarnDbm = -70.0;    ///< 直通回線の電波（dBm）。これ以下で色が変わる
     double wifiCritDbm = -78.0;

@@ -228,7 +228,6 @@ void Sensors::discover() {
     lastBatteryRead_ = -1.0;
     lastWifiRead_ = -1.0;
     lastIioRead_ = -1.0;
-    lastGpuRead_ = -1.0;
     cached_ = SensorSample();
 }
 
@@ -437,13 +436,6 @@ SensorSample Sensors::read(bool includePowerChannels) {
     sample.displayTempC = cached_.displayTempC;
     sample.exhaustTempC = cached_.exhaustTempC;
     sample.heatsinkTempC = cached_.heatsinkTempC;
-
-    // GPU 使用率: ゲーム中は fdinfo の読み直しが 1 回 1.6ms ほどかかるので 2 秒おき
-    if (lastGpuRead_ < 0 || now - lastGpuRead_ >= kGpuIntervalSec - 0.1) {
-        lastGpuRead_ = now;
-        cached_.gpuBusyPct = gpuUsage_.update(now);
-    }
-    sample.gpuBusyPct = cached_.gpuBusyPct;
 
     // 毎回読む軽いもの: 熱による制限（1 回 0.03ms 程度）
     sample.throttleCpu = anyCooling(cpuCooling_);

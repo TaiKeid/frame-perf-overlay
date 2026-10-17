@@ -1,5 +1,10 @@
 # 変更履歴
 
+## 未リリース
+
+- GPU 使用率がいつも 100% になっていたのを直した。SteamOS 0.5.6（カーネル 6.18）の msm では、DRM の fdinfo の `drm-engine-gpu`（GPU が働いた時間）が壊れていて 1 秒で数か月ぶん増え、`drm-cycles-gpu`（働いたサイクル数）も重いゲームの分をほとんど数えない（Half-Life: Alyx で GPU が追いついていないのに 4% ほど）。本体全体の GPU 使用率はこのカーネルでは正しく出せないので、代わりに「GPU 負荷」として、SteamVR が測っている 1 フレームあたりの GPU 時間（`m_flTotalRenderGpuMs`）× アプリの fps を出すようにした。作者の Frame で、Alyx（72Hz、58.6fps、16.5ms）で 97% ほど、SteamVR のホームだけ（90Hz、3ms）で 27% ほど。数えるのは VR のアプリとコンポジタの分だけ（ほかのプログラムが使う GPU は入らない）。設定のキー（`gpu_warn_pct` / `gpu_crit_pct`）はそのまま
+- fdinfo を読む仕組みを外したので、30 秒おきに /proc 全体を調べる処理（1 回最大 20ms）もなくなった。`--print` には GPU 負荷を出さない（SteamVR がないと出せないため）
+
 ## 0.3.1 — 2026-10-17
 
 ### 軽くした（cinnacappu さんの PR #2）

@@ -20,7 +20,7 @@ These images were written out by the app itself (`--dump-png` / `--dump-settings
 
 | Row | Main number | Details | Graph (last 30 s) |
 |---|---|---|---|
-| Frame | The app's frame rate and the display refresh rate (e.g. `72 fps / 90Hz`) | GPU usage (estimate) next to the title; GPU and CPU time per frame (ms), reprojection ratio, dropped frames | Frame rate, with the refresh rate as a dotted line and GPU usage as a shaded area. A yellow badge shows when SteamVR is holding the app at half (or a third) of the refresh rate |
+| Frame | The app's frame rate and the display refresh rate (e.g. `72 fps / 90Hz`) | GPU load of the VR app and SteamVR next to the title; GPU and CPU time per frame (ms), reprojection ratio, dropped frames | Frame rate, with the refresh rate as a dotted line and GPU usage as a shaded area. A yellow badge shows when SteamVR is holding the app at half (or a third) of the refresh rate |
 | Power | Power draw of the main supply rail (W) | Sum of all measured channels, fan speed | Main rail power |
 | Temp | CPU temperature (hottest core) | GPU, battery, and near the display / exhaust / heat sink | CPU and GPU, with the warning thresholds. A red badge and a red frame around the panel appear while heat is throttling the CPU or GPU |
 | Bottom line 1 | CPU usage (overall and busiest core), fastest cluster clock, GPU clock | | |
@@ -157,7 +157,7 @@ A file with every key at its default value is in [`contrib/config.example.json`]
 | `thresholds.battery_warn_pct` / `battery_crit_pct` | `30` / `15` | Headset battery (%), yellow / red at or **below** |
 | `thresholds.power_warn_w` / `power_crit_w` | `13` / `16` | Main rail power (W) |
 | `thresholds.cpu_warn_pct` / `cpu_crit_pct` | `85` / `97` | Busiest CPU core (%) |
-| `thresholds.gpu_warn_pct` / `gpu_crit_pct` | `85` / `95` | Estimated GPU usage (%) |
+| `thresholds.gpu_warn_pct` / `gpu_crit_pct` | `85` / `95` | GPU load of the VR app and SteamVR (%) |
 | `thresholds.wifi_warn_dbm` / `wifi_crit_dbm` | `-70` / `-78` | Wireless signal (dBm, direct link or Wi-Fi), yellow / red at or **below**. Also where the Wi-Fi icon drops from 3 to 2 and from 2 to 1 bars |
 | `thresholds.controller_warn_pct` / `controller_crit_pct` | `20` / `10` | Controller battery (%), yellow / red at or **below** |
 
@@ -212,7 +212,7 @@ Some values were checked against another source on a Steam Frame; others are est
 **Estimates**
 
 - **Power**: which circuit each power channel measures isn't documented. The main rail looks like the total supply, but that is a guess, and the "all channels" sum may count some power twice.
-- **GPU usage**: adds up the GPU time the kernel reports for your user's processes. Work done by root processes isn't counted, overlapping work is capped at 100 %, and a process that starts using the GPU can take up to 30 seconds to be counted.
+- **GPU load**: the GPU time per frame that SteamVR measures, multiplied by the app's frame rate. It counts only the VR app and the SteamVR compositor (not other programs using the GPU), is capped at 100 % when GPU work overlaps, and shows `--` without SteamVR. So it isn't the GPU usage of the whole headset. The kernel's per-process GPU counters, which this used before, aren't used: on SteamOS 0.5.6 they are broken or miss most of a heavy game's work.
 - **fps while streaming with Steam Link**: not yet checked whether frames dropped on the PC or on the network always show up as a lower fps.
 - **Wireless throughput**: counts all traffic on the direct wireless link, not only the stream. On **Wi-Fi** it is everything the headset sends and receives over Wi-Fi (downloads, other apps and so on), not only Steam Link.
 - **Wi-Fi signal**: on the direct link it is the average signal of the PC's acknowledgements (the headset's own signal reading is 0 there); on Wi-Fi it is the signal of the access point as the headset receives it (the same value the OS shows), so the two can differ by a few dB for the same distance.
@@ -243,7 +243,7 @@ Some values were checked against another source on a Steam Frame; others are est
 - Use at your own risk. The software comes with no warranty (see [LICENSE](LICENSE)). **The author is not responsible for any damage from using it, including damage to your headset or your Steam account.**
 - It was made by the author with an AI assistant (Claude), includes code contributed by others (see [CHANGELOG.md](CHANGELOG.md)), and was tested on the author's own Steam Frame. It may not behave the same on yours.
 - What it does on your headset:
-  - It only **reads** from sysfs and `/proc` (sensors, CPU, memory, and the GPU time the kernel reports for your own processes). It never writes there, and it doesn't touch fans, clocks, power settings or cameras. To pick the default language it also reads the `language` line of Steam's `~/.steam/registry.vdf` once at startup (read only).
+  - It only **reads** from sysfs and `/proc` (sensors, CPU and memory). It never writes there, and it doesn't touch fans, clocks, power settings or cameras. To pick the default language it also reads the `language` line of Steam's `~/.steam/registry.vdf` once at startup (read only).
   - It writes only: its own settings file; the files `install.sh` puts under `~/.local`, the service file under `~/.config/systemd/user` and `~/.config/frame-perf-overlay/install-args`; the update helper's cache files under `~/.cache/frame-perf-overlay/` (see [Privacy](#privacy)); when you use the **Autostart** switch, `systemctl --user enable` / `disable` for its own service; and, when you confirm an update, a temporary systemd user unit (`frame-perf-overlay-update`, started with `systemd-run --user`) that runs the new release's `install.sh`.
   - Its only outside network access is the GitHub update check described in [Privacy](#privacy) — nothing else it does talks to any server, on or off the headset.
   - It doesn't change any Steam or SteamVR files or settings. It is an ordinary OpenVR overlay and uses only the public OpenVR API.

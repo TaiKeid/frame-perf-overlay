@@ -200,7 +200,7 @@ void drawSeries(const Pen& pen, const GraphArea& area, const History& history, C
 }
 
 /**
- * 時系列を下から塗りつぶして描く（GPU 使用率のように背景として薄く出す用）。
+ * 時系列を下から塗りつぶして描く（GPU 負荷のように背景として薄く出す用）。
  * @param pen 描画道具
  * @param area グラフの場所（縦軸はこの時系列の範囲）
  * @param history 描く時系列
@@ -367,8 +367,8 @@ void drawFrameRow(const Pen& pen, double top, const PanelState& state, const Con
     const double x = kPad;
 
     pen.text(x, top + 17, t.frame, 16, kTextMuted);
-    // 見出しの右に GPU 使用率（目安）
-    const double gpuPct = state.sensors.gpuBusyPct;
+    // 見出しの右に GPU 負荷（目安）
+    const double gpuPct = state.frame.gpuBusyPct;
     const double pctRight = x + kLeftWidth - 4;
     const double pctWidth = pen.text(pctRight, top + 17, num(gpuPct, 0) + "%", 17,
                                      colorOf(levelOf(gpuPct, th.gpuWarnPct, th.gpuCritPct)), true, true);
@@ -407,7 +407,7 @@ void drawFrameRow(const Pen& pen, double top, const PanelState& state, const Con
     const GraphArea area {kGraphX, top + 4, kGraphWidth, kRowHeight - 8, 0.0, maxV,
                           state.now, static_cast<double>(config.graphSeconds)};
     drawGraphFrame(pen, area, num(area.maxV, 0) + "fps");
-    // GPU 使用率（0〜100%）を背景に薄く塗る
+    // GPU 負荷（0〜100%）を背景に薄く塗る
     GraphArea pctArea = area;
     pctArea.minV = 0.0;
     pctArea.maxV = 100.0;
@@ -610,7 +610,7 @@ void PanelState::update(double time, const SensorSample& sample, const FrameStat
     powerW.push(time, sample.powerMainW, keepSeconds);
     cpuTempC.push(time, sample.cpuTempC, keepSeconds);
     gpuTempC.push(time, sample.gpuTempC, keepSeconds);
-    gpuBusyPct.push(time, sample.gpuBusyPct, keepSeconds);
+    gpuBusyPct.push(time, frameStats.valid ? frameStats.gpuBusyPct : nan, keepSeconds);
 }
 
 PanelRenderer::PanelRenderer(const FontSet& fonts) : fonts_(fonts), visibleHeight_(kHeight) {

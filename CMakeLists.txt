@@ -28,7 +28,6 @@ add_executable(frame-perf-overlay
   src/vk_texture.cpp
   src/draw.cpp
   src/settings_panel.cpp
-  src/gpu_usage.cpp
   src/wifi_link.cpp
   src/i18n.cpp
   src/autostart.cpp
@@ -97,16 +96,11 @@ if(BUILD_TESTING)
   target_link_libraries(runtime-test PRIVATE PkgConfig::VULKAN)
   add_test(NAME runtime COMMAND runtime-test)
 
-  add_executable(sensors-test tests/sensors_test.cpp src/sensors.cpp src/gpu_usage.cpp src/wifi_link.cpp)
+  add_executable(sensors-test tests/sensors_test.cpp src/sensors.cpp src/wifi_link.cpp)
   target_include_directories(sensors-test PRIVATE src)
   target_compile_options(sensors-test PRIVATE -Wall -Wextra)
   target_link_libraries(sensors-test PRIVATE PkgConfig::LIBNL)
   add_test(NAME sensors COMMAND sensors-test)
-
-  add_executable(gpu-usage-test tests/gpu_usage_test.cpp src/gpu_usage.cpp)
-  target_include_directories(gpu-usage-test PRIVATE src)
-  target_compile_options(gpu-usage-test PRIVATE -Wall -Wextra)
-  add_test(NAME gpu-usage COMMAND gpu-usage-test)
 
   add_executable(ui-helpers-test tests/ui_helpers_test.cpp src/draw.cpp src/config.cpp src/json.cpp src/i18n.cpp)
   target_include_directories(ui-helpers-test PRIVATE src)

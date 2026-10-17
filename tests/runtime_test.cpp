@@ -1,8 +1,10 @@
 // 機器基準の変換を手首の確認のたびではなく設定の反映時に作るようにした変更の回帰テスト。
 #include "vr_overlay.h"
 
+#include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <limits>
 
 namespace {
 
@@ -84,10 +86,24 @@ void eventReuse() {
           "new event data was lost");
 }
 
+// GPU 負荷の目安（1 枚あたりの GPU 時間 × 毎秒の枚数）。値は作者の Frame で測ったもの
+void gpuBusyFromFrames() {
+    const auto near = [](double actual, double expected) { return std::fabs(actual - expected) < 1e-9; };
+    check(near(estimateGpuBusyPct(16.5, 58.6), 96.69), "Half-Life: Alyx at 72Hz should be about 97%");
+    check(near(estimateGpuBusyPct(3.0, 90.0), 27.0), "SteamVR Home at 90Hz should be 27%");
+    check(near(estimateGpuBusyPct(0.0, 90.0), 0.0), "no GPU work should be 0%");
+    check(near(estimateGpuBusyPct(16.0, 72.0), 100.0), "overlapping GPU work should stop at 100%");
+    const double nan = std::numeric_limits<double>::quiet_NaN();
+    check(std::isnan(estimateGpuBusyPct(nan, 90.0)) && std::isnan(estimateGpuBusyPct(3.0, nan)),
+          "missing frame timing should be unavailable");
+    check(std::isnan(FrameStats().gpuBusyPct), "GPU load should start unavailable");
+}
+
 }  // namespace
 
 int main() {
     attachmentTransforms();
     eventReuse();
-    std::puts("runtime transform/event tests passed");
+    gpuBusyFromFrames();
+    std::puts("runtime transform/event/GPU load tests passed");
 }

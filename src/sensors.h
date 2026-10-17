@@ -1,7 +1,6 @@
 // /proc と /sys からの読み取り（読むだけ。書き込みは一切しない）。
 #pragma once
 
-#include "gpu_usage.h"
 #include "wifi_link.h"
 
 #include <cstdint>
@@ -33,7 +32,6 @@ struct SensorSample {
     // GPU
     double gpuFreqMHz = kNoValue;
     double gpuMaxFreqMHz = kNoValue;
-    double gpuBusyPct = kNoValue;      ///< GPU 使用率の目安（DRM fdinfo の drm-engine-gpu から）
     // 温度（℃）
     double cpuTempC = kNoValue;        ///< cpu*-thermal / cpuss*-thermal の最大
     double gpuTempC = kNoValue;        ///< gpuss-*-thermal の最大
@@ -82,7 +80,7 @@ public:
     /**
      * 開いてあるファイルを読み直して値を返す。CPU 使用率は前回との差から出すので初回は NaN。
      * 重いものは間隔をあけて実際に読み、あいだは前回の値を返す:
-     * 電力・直通回線・GPU 使用率は 2 秒おき、バッテリー・iio の温度は 5 秒おき（GPU 使用率の fd 探しは 30 秒おき）。
+     * 電力・直通回線は 2 秒おき、バッテリー・iio の温度は 5 秒おき（GPU 負荷は SteamVR のフレーム計測から出すので、ここでは読まない）。
      * @param includePowerChannels 個別の電力チャンネルも結果にコピーする（合計値と読み取り間隔は変わらない）
      * @return 読み取り結果
      */
@@ -120,19 +118,16 @@ private:
     Source displayTemp_, exhaustTemp_, heatsinkTemp_;  ///< iio の温度（m℃）
     std::vector<Source> cpuCooling_;                   ///< cooling_device（cpufreq-cpu*）の cur_state
     std::vector<Source> gpuCooling_;                   ///< cooling_device（devfreq-*gpu）の cur_state
-    GpuUsage gpuUsage_;
     WifiLink wifiLink_;
 
     static constexpr double kPowerIntervalSec = 2.0;    ///< 電力を読む間隔（センサー自体の更新も 1.5〜2 秒おき）
     static constexpr double kBatteryIntervalSec = 5.0;  ///< バッテリーを読む間隔
     static constexpr double kWifiIntervalSec = 2.0;     ///< 直通回線を読む間隔
-    static constexpr double kGpuIntervalSec = 2.0;      ///< GPU 使用率を読む間隔（ゲーム中は 1 回 1.6ms ほど）
     static constexpr double kIioIntervalSec = 5.0;      ///< iio の温度を読む間隔（ADC の変換で 1 回数 ms かかる）
     double lastPowerRead_ = -1.0;
     double lastBatteryRead_ = -1.0;
     double lastWifiRead_ = -1.0;
     double lastIioRead_ = -1.0;
-    double lastGpuRead_ = -1.0;
     SensorSample cached_;              ///< 間隔をあけて読む値（電力・バッテリー・直通回線・iio 温度）の前回値
 
     std::vector<uint64_t> prevBusy_;   ///< /proc/stat の前回値（[0] が全体、以降コアごと）

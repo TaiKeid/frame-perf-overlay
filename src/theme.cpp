@@ -73,7 +73,7 @@ const std::vector<ContrastPair>& contrastPairs() {
         {"性能パネル: 制限中のバッジの文字（黄の塗り）", kOnAccent, kWarn, ContrastKind::Text},
         {"性能パネル: 熱で制限中のバッジの文字（赤の塗り）", kOnAccent, kDanger, ContrastKind::Text},
         {"性能パネル: fps・電力・CPU 温度の線（グラフの台）", kAccent, kBg, ContrastKind::Ui},
-        {"性能パネル: fps の線（GPU 使用率の塗りの上）", kAccent, kGpuFill, ContrastKind::Ui},
+        {"性能パネル: fps の線（GPU 負荷の塗りの上）", kAccent, kGpuFill, ContrastKind::Ui},
         {"性能パネル: GPU 温度の線（グラフの台）", kGpu, kBg, ContrastKind::Ui},
         {"性能パネル: 黄のしきい値の線（グラフの台）", kWarn, kBg, ContrastKind::Ui},
         {"性能パネル: 赤のしきい値の線（グラフの台）", kDanger, kBg, ContrastKind::Ui},
