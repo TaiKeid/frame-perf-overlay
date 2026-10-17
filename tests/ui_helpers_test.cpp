@@ -88,22 +88,28 @@ void pixels() {
     CHECK(actual == expected);
     cairo_surface_destroy(image);
 
-    // Respect Cairo's row stride and overwrite an already-sized/reused buffer.
-    constexpr int width = 13, height = 17, stride = 64;
-    std::vector<uint32_t> padded(stride / 4 * height, 0xdeadbeef);
-    for (int y = 0; y < height; ++y) {
+    // Exercise complete blocks, every tail length, poisoned row padding and
+    // buffer reuse. Rows cover opaque, zero-alpha with RGB, fractional and mixed blocks.
+    constexpr int height = 4;
+    const uint32_t fractional[] = {0x01010002, 0x7f7f20ff, 0xfe80fe40, 0x03030201};
+    const uint32_t mixed[] = {0xff123456, 0x00123456, 0x807f4020, 0x0180ff02};
+    for (int width = 1; width <= 17; ++width) {
+        const int stride = (width + 4) * 4;
+        std::vector<uint32_t> padded(stride / 4 * height, 0xdeadbeef);
         for (int x = 0; x < width; ++x) {
-            const unsigned a = (y * width + x) % 256;
-            padded[y * stride / 4 + x] = (a << 24) | (a << 16) | ((a / 2) << 8) | (a / 3);
+            padded[x] = 0xff000000 | (0x123456u + x);
+            padded[stride / 4 + x] = 0x123456u + x;
+            padded[2 * stride / 4 + x] = fractional[x % 4];
+            padded[3 * stride / 4 + x] = mixed[x % 4];
         }
+        image = cairo_image_surface_create_for_data(reinterpret_cast<uint8_t*>(padded.data()), CAIRO_FORMAT_ARGB32,
+                                                    width, height, stride);
+        CHECK(cairo_surface_status(image) == CAIRO_STATUS_SUCCESS);
+        expectedRgba(image, expected);
+        surfaceToRgba(image, actual);
+        CHECK(actual == expected && actual.size() == width * height * 4);
+        cairo_surface_destroy(image);
     }
-    image = cairo_image_surface_create_for_data(reinterpret_cast<uint8_t*>(padded.data()), CAIRO_FORMAT_ARGB32,
-                                                width, height, stride);
-    CHECK(cairo_surface_status(image) == CAIRO_STATUS_SUCCESS);
-    expectedRgba(image, expected);
-    surfaceToRgba(image, actual);
-    CHECK(actual == expected && actual.size() == width * height * 4);
-    cairo_surface_destroy(image);
 }
 
 void configuration(const std::string& directory) {
