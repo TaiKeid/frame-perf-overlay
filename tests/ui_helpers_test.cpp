@@ -159,7 +159,7 @@ void configuration(const std::string& directory) {
 
 // Optional developer measurement; never a timing assertion in CTest.
 void benchmark() {
-    for (const auto dimensions : {std::pair<int, int>{512, 460}, {1600, 738}}) {
+    for (const auto& dimensions : {std::pair<int, int>{512, 460}, {1600, 738}}) {
         for (int kind = 0; kind < 3; ++kind) {
             const int width = dimensions.first, height = dimensions.second;
             cairo_surface_t* image = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, width, height);
