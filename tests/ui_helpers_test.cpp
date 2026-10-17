@@ -107,7 +107,7 @@ void pixels() {
         CHECK(cairo_surface_status(image) == CAIRO_STATUS_SUCCESS);
         expectedRgba(image, expected);
         surfaceToRgba(image, actual);
-        CHECK(actual == expected && actual.size() == width * height * 4);
+        CHECK(actual == expected && actual.size() == static_cast<size_t>(width) * height * 4);
         cairo_surface_destroy(image);
     }
 }
