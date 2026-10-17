@@ -11,6 +11,14 @@
 
 struct SensorsTestAccess {
     static void setStat(Sensors& sensors, int fd) { sensors.procStat_.fd = ::dup(fd); }
+    static void setDescriptionSources(Sensors& sensors, int fd) {
+        sensors.cpuTemps_ = {{"", "cpu0-thermal", -1}, {"", "cpu1-thermal", -1}};
+        sensors.gpuTemps_ = {{"", "gpuss-thermal", -1}};
+        sensors.gpuFreq_ = {"/synthetic/gpu/cur_freq", "gpu", ::dup(fd)};
+        sensors.powers_ = {{"/synthetic/power1_input", "max34417_10/vph", -1}};
+        sensors.cpuCooling_ = {{"", "cpufreq-cpu0", -1}};
+        sensors.gpuCooling_ = {{"", "devfreq-gpu", -1}};
+    }
     static SensorSample cpu(Sensors& sensors) {
         SensorSample sample;
         sensors.readCpuUsage(sample);
@@ -103,12 +111,32 @@ void repeatedSamples() {
     }
 }
 
+void description() {
+    StatFile stat;
+    Sensors sensors;
+    SensorsTestAccess::setDescriptionSources(sensors, stat.fd);
+    check(sensors.describe() ==
+              "CPU 温度: 2 個 cpu0-thermal cpu1-thermal\n"
+              "GPU 温度: 1 個 gpuss-thermal\n"
+              "DDR 温度: （見つからない）\n"
+              "CPU クロック: 0 policy / 大コア （見つからない）\n"
+              "GPU クロック: /synthetic/gpu/cur_freq\n"
+              "消費電力: 1 ch\n  max34417_10/vph -> /synthetic/power1_input\n"
+              "ファン: （見つからない）\n"
+              "バッテリー: （見つからない）\n"
+              "充電器: （見つからない）\n"
+              "iio 温度: （見つからない） / （見つからない） / （見つからない）\n"
+              "熱制限: CPU 1 個 cpufreq-cpu0 / GPU 1 個 devfreq-gpu",
+          "sensor description changed");
+}
+
 }  // namespace
 
 int main() {
     try {
         usageAndTopology();
         repeatedSamples();
+        description();
         std::puts("sensor CPU tests passed");
         return 0;
     } catch (const std::exception& error) {
