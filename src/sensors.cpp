@@ -11,7 +11,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <sstream>
 
 namespace {
 
@@ -274,8 +273,8 @@ void Sensors::readCpuUsage(SensorSample& sample) {
     char buffer[4096];
     if (readRaw(procStat_, buffer, sizeof(buffer)) <= 0) return;
 
-    std::vector<uint64_t> busy;
-    std::vector<uint64_t> total;
+    currentBusy_.clear();
+    currentTotal_.clear();
     const char* line = buffer;
     while (line != nullptr && std::strncmp(line, "cpu", 3) == 0) {
         // cpu  user nice system idle iowait irq softirq steal ...
@@ -294,18 +293,18 @@ void Sensors::readCpuUsage(SensorSample& sample) {
             uint64_t all = 0;
             for (int i = 0; i < std::min(count, 8); ++i) all += fields[i];  // guest は user に含まれるので除く
             const uint64_t idle = fields[3] + fields[4];                    // idle + iowait
-            busy.push_back(all - idle);
-            total.push_back(all);
+            currentBusy_.push_back(all - idle);
+            currentTotal_.push_back(all);
         }
         const char* next = std::strchr(line, '\n');
         line = next != nullptr ? next + 1 : nullptr;
     }
 
-    if (!prevTotal_.empty() && prevTotal_.size() == total.size()) {
+    if (!prevTotal_.empty() && prevTotal_.size() == currentTotal_.size()) {
         double maxCore = kNoValue;
-        for (size_t i = 0; i < total.size(); ++i) {
-            const double dt = static_cast<double>(total[i] - prevTotal_[i]);
-            const double db = static_cast<double>(busy[i] - prevBusy_[i]);
+        for (size_t i = 0; i < currentTotal_.size(); ++i) {
+            const double dt = static_cast<double>(currentTotal_[i] - prevTotal_[i]);
+            const double db = static_cast<double>(currentBusy_[i] - prevBusy_[i]);
             const double pct = dt > 0 ? 100.0 * db / dt : 0.0;
             if (i == 0) {
                 sample.cpuUsagePct = pct;
@@ -315,8 +314,8 @@ void Sensors::readCpuUsage(SensorSample& sample) {
         }
         sample.cpuMaxCorePct = maxCore;
     }
-    prevBusy_ = std::move(busy);
-    prevTotal_ = std::move(total);
+    prevBusy_.swap(currentBusy_);
+    prevTotal_.swap(currentTotal_);
 }
 
 void Sensors::readMemory(SensorSample& sample) {
@@ -391,7 +390,7 @@ double Sensors::monotonicSeconds() {
     return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) / 1e9;
 }
 
-SensorSample Sensors::read() {
+SensorSample Sensors::read(bool includePowerChannels) {
     SensorSample sample;
     long long v = 0;
 
@@ -451,7 +450,7 @@ SensorSample Sensors::read() {
     sample.throttleGpu = anyCooling(gpuCooling_);
     sample.powerMainW = cached_.powerMainW;
     sample.powerSumW = cached_.powerSumW;
-    sample.powerChannels = cached_.powerChannels;
+    if (includePowerChannels) sample.powerChannels = cached_.powerChannels;
     sample.batteryPct = cached_.batteryPct;
     sample.batteryVoltageV = cached_.batteryVoltageV;
     sample.batteryCurrentMa = cached_.batteryCurrentMa;
@@ -463,24 +462,56 @@ SensorSample Sensors::read() {
 }
 
 std::string Sensors::describe() const {
-    std::ostringstream out;
-    const auto state = [](const Source& s) { return s.fd >= 0 ? s.path : std::string("（見つからない）"); };
-    out << "CPU 温度: " << cpuTemps_.size() << " 個";
-    for (const auto& s : cpuTemps_) out << " " << s.name;
-    out << "\nGPU 温度: " << gpuTemps_.size() << " 個";
-    for (const auto& s : gpuTemps_) out << " " << s.name;
-    out << "\nDDR 温度: " << state(ddrTemp_);
-    out << "\nCPU クロック: " << cpuFreqs_.size() << " policy / 大コア " << state(cpuBigFreq_);
-    out << "\nGPU クロック: " << state(gpuFreq_);
-    out << "\n消費電力: " << powers_.size() << " ch";
-    for (const auto& s : powers_) out << "\n  " << s.name << " -> " << s.path;
-    out << "\nファン: " << state(fan_);
-    out << "\nバッテリー: " << state(batCapacity_);
-    out << "\n充電器: " << state(chargerOnline_);
-    out << "\niio 温度: " << state(displayTemp_) << " / " << state(exhaustTemp_) << " / " << state(heatsinkTemp_);
-    out << "\n熱制限: CPU " << cpuCooling_.size() << " 個";
-    for (const auto& s : cpuCooling_) out << " " << s.name;
-    out << " / GPU " << gpuCooling_.size() << " 個";
-    for (const auto& s : gpuCooling_) out << " " << s.name;
-    return out.str();
+    std::string out;
+    const auto state = [&](const Source& s) { out += s.fd >= 0 ? s.path : "（見つからない）"; };
+    const auto count = [&](size_t n, const char* unit) {
+        out += std::to_string(n);
+        out += unit;
+    };
+    const auto names = [&](const std::vector<Source>& sources) {
+        for (const auto& s : sources) {
+            out += ' ';
+            out += s.name;
+        }
+    };
+    out += "CPU 温度: ";
+    count(cpuTemps_.size(), " 個");
+    names(cpuTemps_);
+    out += "\nGPU 温度: ";
+    count(gpuTemps_.size(), " 個");
+    names(gpuTemps_);
+    out += "\nDDR 温度: ";
+    state(ddrTemp_);
+    out += "\nCPU クロック: ";
+    count(cpuFreqs_.size(), " policy / 大コア ");
+    state(cpuBigFreq_);
+    out += "\nGPU クロック: ";
+    state(gpuFreq_);
+    out += "\n消費電力: ";
+    count(powers_.size(), " ch");
+    for (const auto& s : powers_) {
+        out += "\n  ";
+        out += s.name;
+        out += " -> ";
+        out += s.path;
+    }
+    out += "\nファン: ";
+    state(fan_);
+    out += "\nバッテリー: ";
+    state(batCapacity_);
+    out += "\n充電器: ";
+    state(chargerOnline_);
+    out += "\niio 温度: ";
+    state(displayTemp_);
+    out += " / ";
+    state(exhaustTemp_);
+    out += " / ";
+    state(heatsinkTemp_);
+    out += "\n熱制限: CPU ";
+    count(cpuCooling_.size(), " 個");
+    names(cpuCooling_);
+    out += " / GPU ";
+    count(gpuCooling_.size(), " 個");
+    names(gpuCooling_);
+    return out;
 }

@@ -37,6 +37,19 @@ add_executable(frame-perf-overlay
 )
 target_include_directories(frame-perf-overlay PRIVATE third_party/openvr vendor/frame-updater/cpp)
 target_compile_options(frame-perf-overlay PRIVATE -Wall -Wextra)
+# Release の最適化。例外や浮動小数点の扱いは変えない（OFF にすると速さ優先の -O3 ＋ LTO）
+option(FRAME_PERF_OPTIMIZE_SIZE "Optimize the release overlay for installed size" ON)
+if(FRAME_PERF_OPTIMIZE_SIZE)
+  target_compile_options(frame-perf-overlay PRIVATE $<$<CONFIG:Release>:-Os>)
+endif()
+target_compile_options(frame-perf-overlay PRIVATE
+  $<$<CONFIG:Release>:-ffunction-sections;-fdata-sections>)
+target_link_options(frame-perf-overlay PRIVATE $<$<CONFIG:Release>:-Wl,--gc-sections>)
+include(CheckIPOSupported)
+check_ipo_supported(RESULT PERF_IPO_SUPPORTED OUTPUT PERF_IPO_ERROR)
+if(PERF_IPO_SUPPORTED)
+  set_property(TARGET frame-perf-overlay PROPERTY INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+endif()
 # --version で出すバージョン（上の project(VERSION) から）
 target_compile_definitions(frame-perf-overlay PRIVATE FRAME_PERF_OVERLAY_VERSION="${PROJECT_VERSION}")
 target_link_libraries(frame-perf-overlay PRIVATE
@@ -77,4 +90,27 @@ if(BUILD_TESTING)
   target_compile_options(wrist-clock-test PRIVATE -Wall -Wextra)
   target_link_libraries(wrist-clock-test PRIVATE PkgConfig::CAIRO PkgConfig::FREETYPE PkgConfig::LIBNL)
   add_test(NAME wrist-clock COMMAND wrist-clock-test)
+
+  add_executable(runtime-test tests/runtime_test.cpp src/placement.cpp src/config.cpp src/json.cpp src/i18n.cpp)
+  target_include_directories(runtime-test PRIVATE src third_party/openvr)
+  target_compile_options(runtime-test PRIVATE -Wall -Wextra)
+  target_link_libraries(runtime-test PRIVATE PkgConfig::VULKAN)
+  add_test(NAME runtime COMMAND runtime-test)
+
+  add_executable(sensors-test tests/sensors_test.cpp src/sensors.cpp src/gpu_usage.cpp src/wifi_link.cpp)
+  target_include_directories(sensors-test PRIVATE src)
+  target_compile_options(sensors-test PRIVATE -Wall -Wextra)
+  target_link_libraries(sensors-test PRIVATE PkgConfig::LIBNL)
+  add_test(NAME sensors COMMAND sensors-test)
+
+  add_executable(gpu-usage-test tests/gpu_usage_test.cpp src/gpu_usage.cpp)
+  target_include_directories(gpu-usage-test PRIVATE src)
+  target_compile_options(gpu-usage-test PRIVATE -Wall -Wextra)
+  add_test(NAME gpu-usage COMMAND gpu-usage-test)
+
+  add_executable(ui-helpers-test tests/ui_helpers_test.cpp src/draw.cpp src/config.cpp src/json.cpp src/i18n.cpp)
+  target_include_directories(ui-helpers-test PRIVATE src)
+  target_compile_options(ui-helpers-test PRIVATE -Wall -Wextra)
+  target_link_libraries(ui-helpers-test PRIVATE PkgConfig::CAIRO PkgConfig::FREETYPE)
+  add_test(NAME ui-helpers COMMAND ui-helpers-test)
 endif()

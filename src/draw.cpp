@@ -65,28 +65,28 @@ void FontSet::load(const std::string& regularPath, const std::string& boldPath) 
     boldPath_ = boldPath;
 }
 
-double Pen::measure(const std::string& text, double size, bool isBold) const {
+double Pen::measure(const char* text, double size, bool isBold) const {
     cairo_set_font_face(cr, isBold ? fonts->bold() : fonts->regular());
     cairo_set_font_size(cr, size);
     cairo_text_extents_t extents;
-    cairo_text_extents(cr, text.c_str(), &extents);
+    cairo_text_extents(cr, text, &extents);
     return extents.x_advance;
 }
 
-double Pen::text(double x, double y, const std::string& text, double size, Color c, bool isBold,
+double Pen::text(double x, double y, const char* text, double size, Color c, bool isBold,
                  bool alignRight) const {
     color(c);
     if (alignRight) {
         const double width = measure(text, size, isBold);
         cairo_move_to(cr, x - width, y);
-        cairo_show_text(cr, text.c_str());
+        cairo_show_text(cr, text);
         return width;
     }
     // 左揃えは先に幅を測らず、描いたあとの現在位置から幅を出す（文字の組み立てを 1 回で済ませる）
     cairo_set_font_face(cr, isBold ? fonts->bold() : fonts->regular());
     cairo_set_font_size(cr, size);
     cairo_move_to(cr, x, y);
-    cairo_show_text(cr, text.c_str());
+    cairo_show_text(cr, text);
     double endX = x;
     double endY = y;
     cairo_get_current_point(cr, &endX, &endY);
@@ -108,7 +108,7 @@ void Pen::dot(double x, double y, Color c) const {
     cairo_fill(cr);
 }
 
-double fitSize(const Pen& pen, const std::string& text, double size, double minSize, double maxWidth, bool bold) {
+double fitSize(const Pen& pen, const char* text, double size, double minSize, double maxWidth, bool bold) {
     while (size > minSize && pen.measure(text, size, bold) > maxWidth) size -= 1;
     return size;
 }
@@ -117,7 +117,7 @@ double centerBaseline(double top, double h, double size) {
     return top + h / 2 + size * 0.36;
 }
 
-void textCentered(const Pen& pen, double cx, double baseline, const std::string& text, double size, Color c, bool bold) {
+void textCentered(const Pen& pen, double cx, double baseline, const char* text, double size, Color c, bool bold) {
     pen.text(cx - pen.measure(text, size, bold) / 2, baseline, text, size, c, bold);
 }
 
@@ -170,16 +170,14 @@ void drawDisc(cairo_t* cr, double cx, double cy, double r, Color c) {
 }
 
 void surfaceToRgba(cairo_surface_t* surface, std::vector<uint8_t>& out) {
-    // 乗算済みを戻す計算（c * 255 / a）を前もって表にしておく（割り算を画素ごとにしない）
-    static const std::vector<uint8_t> unpremultiply = [] {
-        std::vector<uint8_t> table(256 * 256);
-        for (uint32_t a = 0; a < 256; ++a) {
-            for (uint32_t c = 0; c < 256; ++c) {
-                const uint32_t value = a == 0 ? 0 : std::min<uint32_t>(255, (c * 255 + a / 2) / a);
-                table[a * 256 + c] = static_cast<uint8_t>(value);
-            }
-        }
-        return table;
+    // 乗算済みを戻す計算（c * 255 / a）を前もって表にしておく（割り算を画素ごとにしない）。
+    // 表は初回にメモリ上で作るので、実行ファイルには 64 KiB の表を持たない
+    static const auto table = [] {
+        std::vector<uint8_t> values(256 * 256);
+        for (unsigned a = 1; a < 256; ++a)
+            for (unsigned c = 0; c < 256; ++c)
+                values[a * 256 + c] = static_cast<uint8_t>(std::min(255u, (c * 255 + a / 2) / a));
+        return values;
     }();
 
     cairo_surface_flush(surface);
@@ -191,14 +189,60 @@ void surfaceToRgba(cairo_surface_t* surface, std::vector<uint8_t>& out) {
     uint8_t* dst = out.data();
     for (int y = 0; y < height; ++y) {
         const auto* row = reinterpret_cast<const uint32_t*>(data + static_cast<size_t>(y) * stride);
-        for (int x = 0; x < width; ++x) {
-            // cairo は乗算済みの ARGB（ネイティブエンディアンの 32bit）なので、戻して RGBA に並べ替える
-            const uint32_t p = row[x];
-            const uint32_t a = p >> 24;
-            const uint8_t* line = unpremultiply.data() + a * 256;
-            dst[0] = line[(p >> 16) & 0xFF];
-            dst[1] = line[(p >> 8) & 0xFF];
-            dst[2] = line[p & 0xFF];
+        int x = 0;
+        // cairo は乗算済みの ARGB（ネイティブエンディアンの 32bit）なので、戻して RGBA に並べ替える。
+        // 透明度は 4 画素まとめて見る（全部不透明・全部透明なら表を引かない。半透明の画像でも遅くしない）
+        for (; x <= width - 4; x += 4) {
+            const uint32_t p0 = row[x], p1 = row[x + 1], p2 = row[x + 2], p3 = row[x + 3];
+            if (((p0 & p1 & p2 & p3) >> 24) == 255) {
+                dst[0] = static_cast<uint8_t>(p0 >> 16);
+                dst[1] = static_cast<uint8_t>(p0 >> 8);
+                dst[2] = static_cast<uint8_t>(p0);
+                dst[3] = 255;
+                dst[4] = static_cast<uint8_t>(p1 >> 16);
+                dst[5] = static_cast<uint8_t>(p1 >> 8);
+                dst[6] = static_cast<uint8_t>(p1);
+                dst[7] = 255;
+                dst[8] = static_cast<uint8_t>(p2 >> 16);
+                dst[9] = static_cast<uint8_t>(p2 >> 8);
+                dst[10] = static_cast<uint8_t>(p2);
+                dst[11] = 255;
+                dst[12] = static_cast<uint8_t>(p3 >> 16);
+                dst[13] = static_cast<uint8_t>(p3 >> 8);
+                dst[14] = static_cast<uint8_t>(p3);
+                dst[15] = 255;
+            } else if (((p0 | p1 | p2 | p3) >> 24) == 0) {
+                std::fill_n(dst, 16, uint8_t{0});
+            } else {
+                const uint8_t* line0 = table.data() + (p0 >> 24) * 256;
+                dst[0] = line0[(p0 >> 16) & 255];
+                dst[1] = line0[(p0 >> 8) & 255];
+                dst[2] = line0[p0 & 255];
+                dst[3] = static_cast<uint8_t>(p0 >> 24);
+                const uint8_t* line1 = table.data() + (p1 >> 24) * 256;
+                dst[4] = line1[(p1 >> 16) & 255];
+                dst[5] = line1[(p1 >> 8) & 255];
+                dst[6] = line1[p1 & 255];
+                dst[7] = static_cast<uint8_t>(p1 >> 24);
+                const uint8_t* line2 = table.data() + (p2 >> 24) * 256;
+                dst[8] = line2[(p2 >> 16) & 255];
+                dst[9] = line2[(p2 >> 8) & 255];
+                dst[10] = line2[p2 & 255];
+                dst[11] = static_cast<uint8_t>(p2 >> 24);
+                const uint8_t* line3 = table.data() + (p3 >> 24) * 256;
+                dst[12] = line3[(p3 >> 16) & 255];
+                dst[13] = line3[(p3 >> 8) & 255];
+                dst[14] = line3[p3 & 255];
+                dst[15] = static_cast<uint8_t>(p3 >> 24);
+            }
+            dst += 16;
+        }
+        for (; x < width; ++x) {
+            const uint32_t p = row[x], a = p >> 24;
+            const uint8_t* line = table.data() + a * 256;
+            dst[0] = line[(p >> 16) & 255];
+            dst[1] = line[(p >> 8) & 255];
+            dst[2] = line[p & 255];
             dst[3] = static_cast<uint8_t>(a);
             dst += 4;
         }

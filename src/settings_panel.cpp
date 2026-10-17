@@ -9,6 +9,7 @@
 #include <cairo.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 
@@ -508,7 +509,7 @@ void SettingsPanel::layoutButtons() {
     // 下の段の言語・自動起動・終了と更新の帯は、文言の幅が言語や状態で変わるので render() のたびに置き直す
 }
 
-std::string SettingsPanel::labelOf(SettingsAction action, const UiText& text) const {
+const char* SettingsPanel::labelOf(SettingsAction action, const UiText& text) const {
     switch (action) {
         case SettingsAction::ShowOn: return text.on;
         case SettingsAction::ShowOff: return text.off;
@@ -659,17 +660,19 @@ void SettingsPanel::placeFooterButton(SettingsAction action, double x, double y,
 
 void SettingsPanel::drawSegmented(const Pen& pen, const UiText& text, std::initializer_list<SettingsAction> actions,
                                   int selected, bool usable) const {
-    std::vector<const Button*> parts;
+    // このパネルの切り替えはどれも 2〜3 択なので、描くたびに vector を確保せず小さな配列に並べる
+    if (actions.size() == 0 || actions.size() > 3) return;
+    std::array<const Button*, 3> parts {};
+    size_t count = 0;
     for (const SettingsAction action : actions) {
         const Button* b = findButton(action);
         if (b == nullptr) return;
-        parts.push_back(b);
+        parts[count++] = b;
     }
-    if (parts.empty()) return;
     cairo_t* cr = pen.cr;
     const double x = parts.front()->x;
     const double y = parts.front()->y;
-    const double w = parts.back()->x + parts.back()->w - x;
+    const double w = parts[count - 1]->x + parts[count - 1]->w - x;
     const double h = parts.front()->h;
     const double r = h / 2;
     // 地のピル。押せるときは枠（3:1 以上）で部品の形を見せる。押せないときは枠なし
@@ -679,9 +682,9 @@ void SettingsPanel::drawSegmented(const Pen& pen, const UiText& text, std::initi
     if (usable) strokeRounded(pen, x, y, w, h, r, kBorder, 2);
 
     const double inset = 5;
-    const double part = (w - inset * 2) / static_cast<double>(parts.size());
+    const double part = (w - inset * 2) / static_cast<double>(count);
     const double size = 24;
-    for (size_t i = 0; i < parts.size(); ++i) {
+    for (size_t i = 0; i < count; ++i) {
         const SettingsAction action = parts[i]->action;
         const double sx = x + inset + part * static_cast<double>(i);
         const double sy = y + inset;
@@ -699,7 +702,7 @@ void SettingsPanel::drawSegmented(const Pen& pen, const UiText& text, std::initi
             pen.roundedRect(sx, sy, part, sh, sh / 2);
             cairo_fill(cr);
         }
-        const std::string label = labelOf(action, text);
+        const char* label = labelOf(action, text);
         const Color textColor = !usable ? kTextDisabled : (isSelected ? kOnAccent : kText);
         const double checkW = isSelected ? size * 0.9 : 0;
         const double labelSize = fitSize(pen, label, size, size * 0.7, part - 20 - checkW, isSelected);
@@ -729,7 +732,7 @@ void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsActio
         // 押している間は枠をアクセントにして、押したことが分かるようにする
         strokeRounded(pen, b->x, b->y, b->w, b->h, r, pressed ? kAccent : kBorder, 2);
     }
-    const std::string label = labelOf(action, text);
+    const char* label = labelOf(action, text);
     const double checkW = selected && check ? size * 0.9 : 0;
     const double iconW = rotateIcon != 0 ? size * 1.15 : 0;  // 回す向きの絵と、文言との間
     const double labelSize = fitSize(pen, label, size, size * 0.65, b->w - 20 - checkW - iconW, true);
@@ -748,7 +751,7 @@ void SettingsPanel::drawButton(const Pen& pen, const UiText& text, SettingsActio
 double SettingsPanel::drawHeader(const Pen& pen, const UiText& text, const Config& config) const {
     pen.text(kPad, centerBaseline(kHeaderY, kHeaderH, 34), text.settingsTitle, 34, kText, true);
     // 右上の状態のピル: 表示中は緑の塗り＋●＋文字、非表示は灰色の塗り＋○＋文字（色だけで伝えない）
-    const std::string label = config.visible ? text.panelShown : text.panelHidden;
+    const char* label = config.visible ? text.panelShown : text.panelHidden;
     const double size = 20;
     const double h = 42;
     const double y = kHeaderY + (kHeaderH - h) / 2;
@@ -923,7 +926,7 @@ void SettingsPanel::drawFooter(const Pen& pen, const UiText& text, const Config&
     pen.roundedRect(quitX, y, kQuitW, kButtonH, kButtonH / 2);
     cairo_fill(pen.cr);
     strokeRounded(pen, quitX, y, kQuitW, kButtonH, kButtonH / 2, kDanger, 2);
-    const std::string quitLabel = labelOf(SettingsAction::Quit, text);
+    const char* quitLabel = labelOf(SettingsAction::Quit, text);
     const double quitSize = fitSize(pen, quitLabel, 24, 14, kQuitW - 28, true);
     textCentered(pen, quitX + kQuitW / 2, centerBaseline(y, kButtonH, quitSize), quitLabel, quitSize,
                  quitArmed_ ? kOnAccent : kText, true);

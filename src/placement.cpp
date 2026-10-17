@@ -29,6 +29,19 @@ vr::HmdMatrix34_t wristTransform(const WristPose& pose) {
     return m;
 }
 
+vr::HmdMatrix34_t attachmentTransform(const Config& config) {
+    if (config.attachment != Attachment::Head) return wristTransform(selectedWrist(config));
+    double rotation[3][3];
+    panelRotation(config, rotation);
+    const double position[3] = {config.posX, config.posY, config.posZ};
+    vr::HmdMatrix34_t transform {};
+    for (int row = 0; row < 3; ++row) {
+        for (int col = 0; col < 3; ++col) transform.m[row][col] = static_cast<float>(rotation[row][col]);
+        transform.m[row][3] = static_cast<float>(position[row]);
+    }
+    return transform;
+}
+
 vr::HmdMatrix34_t composeTransform(const vr::HmdMatrix34_t& parent, const vr::HmdMatrix34_t& local) {
     vr::HmdMatrix34_t out {};
     for (int row = 0; row < 3; ++row) {

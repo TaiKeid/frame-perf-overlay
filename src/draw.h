@@ -76,7 +76,10 @@ struct Pen {
      * @param isBold 太字か
      * @return 幅（px）
      */
-    double measure(const std::string& text, double size, bool isBold = false) const;
+    double measure(const char* text, double size, bool isBold = false) const;
+    double measure(const std::string& text, double size, bool isBold = false) const {
+        return measure(text.c_str(), size, isBold);
+    }
 
     /**
      * 文字を描く。
@@ -89,8 +92,12 @@ struct Pen {
      * @param alignRight 右揃えにするか
      * @return 描いた文字列の幅（px）
      */
-    double text(double x, double y, const std::string& text, double size, Color c, bool isBold = false,
+    double text(double x, double y, const char* text, double size, Color c, bool isBold = false,
                 bool alignRight = false) const;
+    double text(double x, double y, const std::string& text, double size, Color c, bool isBold = false,
+                bool alignRight = false) const {
+        return this->text(x, y, text.c_str(), size, c, isBold, alignRight);
+    }
 
     /**
      * 角の丸い四角の道筋を作る。
@@ -121,7 +128,10 @@ struct Pen {
  * @param bold 太字か
  * @return 文字の大きさ
  */
-double fitSize(const Pen& pen, const std::string& text, double size, double minSize, double maxWidth, bool bold);
+double fitSize(const Pen& pen, const char* text, double size, double minSize, double maxWidth, bool bold);
+inline double fitSize(const Pen& pen, const std::string& text, double size, double minSize, double maxWidth, bool bold) {
+    return fitSize(pen, text.c_str(), size, minSize, maxWidth, bold);
+}
 
 /**
  * 文字を、ある高さの帯の縦の真ん中に置いたときのベースライン。
@@ -142,7 +152,10 @@ double centerBaseline(double top, double h, double size);
  * @param c 色
  * @param bold 太字か
  */
-void textCentered(const Pen& pen, double cx, double baseline, const std::string& text, double size, Color c, bool bold);
+void textCentered(const Pen& pen, double cx, double baseline, const char* text, double size, Color c, bool bold);
+inline void textCentered(const Pen& pen, double cx, double baseline, const std::string& text, double size, Color c, bool bold) {
+    textCentered(pen, cx, baseline, text.c_str(), size, c, bold);
+}
 
 /**
  * カードを描く: 重ねた影で浮かせ、塗り、（あれば）枠、内側の上の縁の 1px のハイライト。

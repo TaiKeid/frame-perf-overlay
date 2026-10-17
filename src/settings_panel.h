@@ -216,7 +216,7 @@ private:
      * @param text 言語の表
      * @return 文言
      */
-    std::string labelOf(SettingsAction action, const UiText& text) const;
+    const char* labelOf(SettingsAction action, const UiText& text) const;
 
     /**
      * 操作からボタンを探す。
