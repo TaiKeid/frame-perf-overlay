@@ -26,6 +26,9 @@ constexpr double kWristFadeMaxStepSec = kWristPollFadeSec;
  */
 vr::HmdMatrix34_t wristTransform(const WristPose& pose);
 
+/** 設定から、固定先の機器基準の変換を作る。姿勢の読み取りごとではなく、設定を反映するときにだけ呼ぶ。 */
+vr::HmdMatrix34_t attachmentTransform(const Config& config);
+
 /**
  * 変換を合成する（parent · local。どちらも 3×4 で、4 行目は (0, 0, 0, 1) とみなす）。
  * @param parent 親の変換（例: コントローラーの姿勢）

@@ -13,8 +13,9 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <fstream>
-#include <sstream>
+#include <initializer_list>
+#include <iterator>
+#include <string_view>
 
 namespace {
 
@@ -25,7 +26,7 @@ namespace {
  * @param prefix 表示用のキーの前置き（"thresholds." など）
  * @param warnings 追加先
  */
-void warnUnknownKeys(const JsonValue& object, const std::vector<std::string>& known, const std::string& prefix,
+void warnUnknownKeys(const JsonValue& object, std::initializer_list<std::string_view> known, const std::string& prefix,
                      std::vector<std::string>& warnings) {
     for (const auto& member : object.members) {
         if (std::find(known.begin(), known.end(), member.first) == known.end()) {
@@ -116,33 +117,33 @@ void readString(const JsonValue& object, const char* key, std::string& target, s
  * @param th 書き込み先
  * @param warnings 追加先
  */
+struct ThresholdField {
+    const char* key;
+    double Thresholds::*member;
+    double min, max;
+};
+
+constexpr ThresholdField kThresholdFields[] = {
+    {"fps_warn_ratio", &Thresholds::fpsWarnRatio, 0, 1}, {"fps_crit_ratio", &Thresholds::fpsCritRatio, 0, 1},
+    {"frame_warn_ratio", &Thresholds::frameWarnRatio, 0.1, 10}, {"frame_crit_ratio", &Thresholds::frameCritRatio, 0.1, 10},
+    {"reproj_warn_pct", &Thresholds::reprojWarnPct, 0, 100}, {"reproj_crit_pct", &Thresholds::reprojCritPct, 0, 100},
+    {"temp_warn_c", &Thresholds::tempWarnC, 0, 150}, {"temp_crit_c", &Thresholds::tempCritC, 0, 150},
+    {"battery_warn_pct", &Thresholds::batteryWarnPct, 0, 100}, {"battery_crit_pct", &Thresholds::batteryCritPct, 0, 100},
+    {"power_warn_w", &Thresholds::powerWarnW, 0, 100}, {"power_crit_w", &Thresholds::powerCritW, 0, 100},
+    {"cpu_warn_pct", &Thresholds::cpuWarnPct, 0, 100}, {"cpu_crit_pct", &Thresholds::cpuCritPct, 0, 100},
+    {"gpu_warn_pct", &Thresholds::gpuWarnPct, 0, 100}, {"gpu_crit_pct", &Thresholds::gpuCritPct, 0, 100},
+    {"wifi_warn_dbm", &Thresholds::wifiWarnDbm, -120, 0}, {"wifi_crit_dbm", &Thresholds::wifiCritDbm, -120, 0},
+    {"controller_warn_pct", &Thresholds::controllerWarnPct, 0, 100},
+    {"controller_crit_pct", &Thresholds::controllerCritPct, 0, 100},
+};
+
 void readThresholds(const JsonValue& object, Thresholds& th, std::vector<std::string>& warnings) {
-    warnUnknownKeys(object,
-                    {"fps_warn_ratio", "fps_crit_ratio", "frame_warn_ratio", "frame_crit_ratio", "reproj_warn_pct", "reproj_crit_pct", "temp_warn_c",
-                     "temp_crit_c", "battery_warn_pct", "battery_crit_pct", "power_warn_w", "power_crit_w",
-                     "cpu_warn_pct", "cpu_crit_pct", "gpu_warn_pct", "gpu_crit_pct", "wifi_warn_dbm", "wifi_crit_dbm",
-                     "controller_warn_pct", "controller_crit_pct"},
-                    "thresholds.", warnings);
-    readNumber(object, "fps_warn_ratio", 0.0, 1.0, th.fpsWarnRatio, warnings);
-    readNumber(object, "fps_crit_ratio", 0.0, 1.0, th.fpsCritRatio, warnings);
-    readNumber(object, "frame_warn_ratio", 0.1, 10.0, th.frameWarnRatio, warnings);
-    readNumber(object, "frame_crit_ratio", 0.1, 10.0, th.frameCritRatio, warnings);
-    readNumber(object, "reproj_warn_pct", 0.0, 100.0, th.reprojWarnPct, warnings);
-    readNumber(object, "reproj_crit_pct", 0.0, 100.0, th.reprojCritPct, warnings);
-    readNumber(object, "temp_warn_c", 0.0, 150.0, th.tempWarnC, warnings);
-    readNumber(object, "temp_crit_c", 0.0, 150.0, th.tempCritC, warnings);
-    readNumber(object, "battery_warn_pct", 0.0, 100.0, th.batteryWarnPct, warnings);
-    readNumber(object, "battery_crit_pct", 0.0, 100.0, th.batteryCritPct, warnings);
-    readNumber(object, "power_warn_w", 0.0, 100.0, th.powerWarnW, warnings);
-    readNumber(object, "power_crit_w", 0.0, 100.0, th.powerCritW, warnings);
-    readNumber(object, "cpu_warn_pct", 0.0, 100.0, th.cpuWarnPct, warnings);
-    readNumber(object, "cpu_crit_pct", 0.0, 100.0, th.cpuCritPct, warnings);
-    readNumber(object, "gpu_warn_pct", 0.0, 100.0, th.gpuWarnPct, warnings);
-    readNumber(object, "gpu_crit_pct", 0.0, 100.0, th.gpuCritPct, warnings);
-    readNumber(object, "wifi_warn_dbm", -120.0, 0.0, th.wifiWarnDbm, warnings);
-    readNumber(object, "wifi_crit_dbm", -120.0, 0.0, th.wifiCritDbm, warnings);
-    readNumber(object, "controller_warn_pct", 0.0, 100.0, th.controllerWarnPct, warnings);
-    readNumber(object, "controller_crit_pct", 0.0, 100.0, th.controllerCritPct, warnings);
+    for (const auto& member : object.members) {
+        const auto known = std::find_if(std::begin(kThresholdFields), std::end(kThresholdFields),
+                                      [&](const ThresholdField& field) { return member.first == field.key; });
+        if (known == std::end(kThresholdFields)) warnings.push_back("知らないキーです: thresholds." + member.first);
+    }
+    for (const auto& field : kThresholdFields) readNumber(object, field.key, field.min, field.max, th.*field.member, warnings);
 }
 
 /**
@@ -200,16 +201,24 @@ std::string defaultConfigPath() {
 }
 
 bool loadConfig(const std::string& path, Config& out, std::vector<std::string>& warnings, std::string& error) {
-    std::ifstream file(path, std::ios::binary);
-    if (!file) {
+    FILE* file = std::fopen(path.c_str(), "rb");
+    if (file == nullptr) {
         out = Config();  // ファイルが無いときは既定値
         return true;
     }
-    std::stringstream buffer;
-    buffer << file.rdbuf();
+    std::string source;
+    char buffer[4096];
+    size_t count;
+    while ((count = std::fread(buffer, 1, sizeof(buffer), file)) != 0) source.append(buffer, count);
+    const bool readFailed = std::ferror(file) != 0;
+    std::fclose(file);
+    if (readFailed) {
+        error = "読み込みに失敗しました: " + path;
+        return false;
+    }
 
     JsonValue root;
-    if (!parseJson(buffer.str(), root, error)) return false;
+    if (!parseJson(source, root, error)) return false;
     if (!root.isObject()) {
         error = "一番外側は { ... } にしてください";
         return false;
@@ -299,27 +308,20 @@ bool makeDirectories(const std::string& dir) {
     return true;
 }
 
-/**
- * 数値を JSON 用の短い文字列にする。
- * @param value 値
- * @return 文字列（例: 0.15、-0.5、500）
- */
-std::string jsonNumber(double value) {
-    char text[32];
-    std::snprintf(text, sizeof(text), "%.4g", value);
-    return text;
-}
-
-/**
- * 文字列を JSON の "..." にする。
- * @param text 文字列
- * @return エスケープ済みの "..."
- */
+/** 文字列を JSON の引用符で囲み、制御文字もエスケープする。 */
 std::string jsonString(const std::string& text) {
     std::string out = "\"";
-    for (const char c : text) {
-        if (c == '"' || c == '\\') out += '\\';
-        out += c;
+    out.reserve(text.size() + 2);
+    constexpr char hex[] = "0123456789abcdef";
+    for (const unsigned char c : text) {
+        if (c < 0x20) {
+            out += "\\u00";
+            out += hex[c >> 4];
+            out += hex[c & 15];
+        } else {
+            if (c == '"' || c == '\\') out += '\\';
+            out += static_cast<char>(c);
+        }
     }
     return out + "\"";
 }
@@ -332,73 +334,53 @@ bool saveConfig(const std::string& path, const Config& config, std::string& erro
         error = "フォルダを作れません: " + std::string(std::strerror(errno));
         return false;
     }
-    /**
-     * 手首の位置と向きを 1 行の JSON にする。
-     */
-    const auto poseJson = [](const WristPose& p) {
-        return "{ \"x\": " + jsonNumber(p.x) + ", \"y\": " + jsonNumber(p.y) + ", \"z\": " + jsonNumber(p.z) +
-               ", \"pitch\": " + jsonNumber(p.pitch) + ", \"yaw\": " + jsonNumber(p.yaw) +
-               ", \"roll\": " + jsonNumber(p.roll) + " }";
-    };
-    const Thresholds& th = config.thresholds;
-    std::ostringstream out;
-    out << "{\n"
-        << "  \"visible\": " << (config.visible ? "true" : "false") << ",\n"
-        << "  \"update_check\": " << (config.updateCheck ? "true" : "false") << ",\n"
-        << "  \"language\": \"" << languageCode(config.language) << "\",\n"
-        << "  \"attachment\": " << jsonString(attachmentName(config.attachment)) << ",\n"
-        << "  \"position\": { \"x\": " << jsonNumber(config.posX) << ", \"y\": " << jsonNumber(config.posY)
-        << ", \"z\": " << jsonNumber(config.posZ) << " },\n"
-        << "  \"rotation\": { \"yaw\": " << jsonNumber(config.yawDeg) << ", \"pitch\": " << jsonNumber(config.pitchDeg)
-        << ", \"roll\": " << jsonNumber(config.rollDeg) << " },\n"
-        << "  \"left_wrist\": " << poseJson(config.leftWrist) << ",\n"
-        << "  \"right_wrist\": " << poseJson(config.rightWrist) << ",\n"
-        << "  \"wrist_fade\": " << (config.wristFade ? "true" : "false") << ",\n"
-        << "  \"wrist_fade_end_deg\": " << jsonNumber(config.wristFadeEndDeg) << ",\n"
-        << "  \"clock_format\": " << config.clockFormat << ",\n"
-        << "  \"width_m\": " << jsonNumber(config.widthM) << ",\n"
-        << "  \"alpha\": " << jsonNumber(config.alpha) << ",\n"
-        << "  \"update_interval_ms\": " << config.updateIntervalMs << ",\n"
-        << "  \"graph_seconds\": " << config.graphSeconds << ",\n"
-        << "  \"font\": " << jsonString(config.fontPath) << ",\n"
-        << "  \"font_bold\": " << jsonString(config.boldFontPath) << ",\n"
-        << "  \"thresholds\": {\n"
-        << "    \"fps_warn_ratio\": " << jsonNumber(th.fpsWarnRatio) << ",\n"
-        << "    \"fps_crit_ratio\": " << jsonNumber(th.fpsCritRatio) << ",\n"
-        << "    \"frame_warn_ratio\": " << jsonNumber(th.frameWarnRatio) << ",\n"
-        << "    \"frame_crit_ratio\": " << jsonNumber(th.frameCritRatio) << ",\n"
-        << "    \"reproj_warn_pct\": " << jsonNumber(th.reprojWarnPct) << ",\n"
-        << "    \"reproj_crit_pct\": " << jsonNumber(th.reprojCritPct) << ",\n"
-        << "    \"temp_warn_c\": " << jsonNumber(th.tempWarnC) << ",\n"
-        << "    \"temp_crit_c\": " << jsonNumber(th.tempCritC) << ",\n"
-        << "    \"battery_warn_pct\": " << jsonNumber(th.batteryWarnPct) << ",\n"
-        << "    \"battery_crit_pct\": " << jsonNumber(th.batteryCritPct) << ",\n"
-        << "    \"power_warn_w\": " << jsonNumber(th.powerWarnW) << ",\n"
-        << "    \"power_crit_w\": " << jsonNumber(th.powerCritW) << ",\n"
-        << "    \"cpu_warn_pct\": " << jsonNumber(th.cpuWarnPct) << ",\n"
-        << "    \"cpu_crit_pct\": " << jsonNumber(th.cpuCritPct) << ",\n"
-        << "    \"gpu_warn_pct\": " << jsonNumber(th.gpuWarnPct) << ",\n"
-        << "    \"gpu_crit_pct\": " << jsonNumber(th.gpuCritPct) << ",\n"
-        << "    \"wifi_warn_dbm\": " << jsonNumber(th.wifiWarnDbm) << ",\n"
-        << "    \"wifi_crit_dbm\": " << jsonNumber(th.wifiCritDbm) << ",\n"
-        << "    \"controller_warn_pct\": " << jsonNumber(th.controllerWarnPct) << ",\n"
-        << "    \"controller_crit_pct\": " << jsonNumber(th.controllerCritPct) << "\n"
-        << "  }\n"
-        << "}\n";
-
-    // 途中で止まっても壊れたファイルが残らないよう、一時ファイルに書いてから置き換える
+    // 一時ファイルに直接書く。文字列全体を組み立てるコピーやストリームのロケールは要らない。
     const std::string temp = path + ".tmp";
-    {
-        std::ofstream file(temp, std::ios::binary | std::ios::trunc);
-        if (!file) {
-            error = "書き込めません: " + temp;
-            return false;
-        }
-        file << out.str();
-        if (!file.flush()) {
-            error = "書き込みに失敗しました: " + temp;
-            return false;
-        }
+    FILE* file = std::fopen(temp.c_str(), "wb");
+    if (file == nullptr) {
+        error = "書き込めません: " + temp;
+        return false;
+    }
+    const auto boolean = [](bool value) { return value ? "true" : "false"; };
+    std::fprintf(file,
+        "{\n"
+        "  \"visible\": %s,\n"
+        "  \"update_check\": %s,\n"
+        "  \"language\": \"%s\",\n"
+        "  \"attachment\": \"%s\",\n"
+        "  \"position\": { \"x\": %.4g, \"y\": %.4g, \"z\": %.4g },\n"
+        "  \"rotation\": { \"yaw\": %.4g, \"pitch\": %.4g, \"roll\": %.4g },\n",
+        boolean(config.visible), boolean(config.updateCheck), languageCode(config.language), attachmentName(config.attachment),
+        config.posX, config.posY, config.posZ, config.yawDeg, config.pitchDeg, config.rollDeg);
+    for (const char* key : {"left_wrist", "right_wrist"}) {
+        const WristPose& p = key[0] == 'l' ? config.leftWrist : config.rightWrist;
+        std::fprintf(file, "  \"%s\": { \"x\": %.4g, \"y\": %.4g, \"z\": %.4g, \"pitch\": %.4g, \"yaw\": %.4g, \"roll\": %.4g },\n",
+                     key, p.x, p.y, p.z, p.pitch, p.yaw, p.roll);
+    }
+    std::fprintf(file,
+        "  \"wrist_fade\": %s,\n"
+        "  \"wrist_fade_end_deg\": %.4g,\n"
+        "  \"clock_format\": %d,\n"
+        "  \"width_m\": %.4g,\n"
+        "  \"alpha\": %.4g,\n"
+        "  \"update_interval_ms\": %d,\n"
+        "  \"graph_seconds\": %d,\n"
+        "  \"font\": %s,\n"
+        "  \"font_bold\": %s,\n"
+        "  \"thresholds\": {\n",
+        boolean(config.wristFade), config.wristFadeEndDeg, config.clockFormat, config.widthM, config.alpha,
+        config.updateIntervalMs, config.graphSeconds, jsonString(config.fontPath).c_str(), jsonString(config.boldFontPath).c_str());
+    const auto* last = std::end(kThresholdFields) - 1;
+    for (const auto& field : kThresholdFields) {
+        std::fprintf(file, "    \"%s\": %.4g%s\n", field.key, config.thresholds.*field.member, &field == last ? "" : ",");
+    }
+    std::fputs("  }\n}\n", file);
+    const bool writeFailed = std::ferror(file) != 0;
+    const bool closeFailed = std::fclose(file) != 0;
+    if (writeFailed || closeFailed) {
+        error = "書き込みに失敗しました: " + temp;
+        ::unlink(temp.c_str());
+        return false;
     }
     if (std::rename(temp.c_str(), path.c_str()) != 0) {
         error = "置き換えに失敗しました: " + std::string(std::strerror(errno));

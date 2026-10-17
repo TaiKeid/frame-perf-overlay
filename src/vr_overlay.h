@@ -39,6 +39,9 @@ struct VrEvents {
     bool quit = false;                  ///< SteamVR から終了を求められた（VREvent_Quit。SteamVR 自体が終わる）
     bool closeRequested = false;        ///< ダッシュボードのアイコンの「閉じる」が押された（VREvent_OverlayClosed）
     std::vector<PointerInput> pointer;  ///< 設定パネルへの操作（届いた順）
+
+    /** イベントを捨て、次の読み取りに配列の容量を再利用する。 */
+    void clear() { quit = closeRequested = false; pointer.clear(); }
 };
 
 /**
@@ -131,9 +134,9 @@ public:
      * たまったイベントを処理する。SteamVR の終了（VREvent_Quit）には AcknowledgeQuit_Exiting で応える。
      * @param includeSystem false なら設定パネルのイベント（マウス・閉じる）だけ見る（設定パネルが見えている間の
      *                      細かい周期用）。true なら SteamVR 全体と性能パネルのイベントも見る
-     * @return 終了要求と設定パネルへの操作
+     * @param result 終了要求と設定パネルへの操作。前の結果は消し、配列の容量は再利用する
      */
-    VrEvents pollEvents(bool includeSystem = true);
+    void pollEvents(VrEvents& result, bool includeSystem = true);
 
     /**
      * 接続時に見つけた vrserver のプロセスがまだ生きているか。
@@ -202,6 +205,7 @@ private:
     bool connected_ = false;
     uint32_t attachedDevice_ = 0xffffffff;  ///< 変換を渡してある機器（0xffffffff = vr::k_unTrackedDeviceIndexInvalid = まだ）
     bool transformDirty_ = true;            ///< 変換を渡し直す必要がある（設定が変わった・前回断られた）
+    vr::HmdMatrix34_t panelTransform_ {};    ///< 設定変更時に作る、機器基準の位置と向き
     WristFadeState wristFade_;              ///< 手首のときの見せる割合（フェード）
     PanelPresentationState presentation_;   ///< OpenVR に反映できた透明度と表示・非表示
     double nextPlacementAt_ = std::numeric_limits<double>::infinity();  ///< 次に updatePlacement を呼ぶ時刻

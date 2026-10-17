@@ -287,6 +287,7 @@ void VrOverlay::applyConfig(const Config& config) {
     if (!connected_ || panelHandle_ == 0) return;
     checkOverlay("SetOverlayWidthInMeters",
                  vr::VROverlay()->SetOverlayWidthInMeters(panelHandle_, static_cast<float>(config.widthM)));
+    panelTransform_ = attachmentTransform(config);
     transformDirty_ = true;
     updatePlacement(config, nowSeconds());
     // 変換を渡した直後に交差を聞くと、SteamVR はまだ前の変換で答える（実機で確かめた）ので、少し待ってから聞く。
@@ -332,35 +333,22 @@ void VrOverlay::updatePlacement(const Config& config, double now) {
     vr::TrackedDeviceIndex_t device = vr::k_unTrackedDeviceIndex_Hmd;
     bool tracked = true;
     double target = 1.0;
-    vr::HmdMatrix34_t transform {};
-    if (wrist) {
+    if (wrist && config.visible) {
         // コントローラー基準の変換。見せる割合は、コントローラーと頭の今の姿勢から、面が目の方を向いている度合いで決める
         device = wristDeviceIndex(config.attachment == Attachment::LeftWrist, now);
-        transform = wristTransform(selectedWrist(config));
         vr::TrackedDevicePose_t poses[vr::k_unMaxTrackedDeviceCount] {};
         vr::VRSystem()->GetDeviceToAbsoluteTrackingPose(vr::TrackingUniverseStanding, 0, poses,
                                                         vr::k_unMaxTrackedDeviceCount);
         tracked = wristTrackingValid(device, poses);
         if (tracked && config.wristFade) {
-            target = wristFacingAlpha(composeTransform(poses[device].mDeviceToAbsoluteTracking, transform),
+            target = wristFacingAlpha(composeTransform(poses[device].mDeviceToAbsoluteTracking, panelTransform_),
                                       poses[vr::k_unTrackedDeviceIndex_Hmd].mDeviceToAbsoluteTracking,
                                       config.wristFadeEndDeg);
-        }
-    } else {
-        // HMD 基準の変換 = 位置 × 回転（3×4 の左 3 列が回転、右端の列が位置）。
-        // 回転はパネル自身の軸で yaw → pitch → roll の順（panelRotation のコメントを参照）。
-        // オーバーレイは +z 側が表。回転なしなら表は頭の方（HMD の +z）を向き、パネルは顔の正面と平行になる
-        double rotation[3][3];
-        panelRotation(config, rotation);
-        const double position[3] = {config.posX, config.posY, config.posZ};
-        for (int row = 0; row < 3; ++row) {
-            for (int col = 0; col < 3; ++col) transform.m[row][col] = static_cast<float>(rotation[row][col]);
-            transform.m[row][3] = static_cast<float>(position[row]);
         }
     }
     bool retry = false;
     if (tracked && config.visible && (transformDirty_ || attachedDevice_ != device)) {
-        const vr::EVROverlayError error = overlay->SetOverlayTransformTrackedDeviceRelative(panelHandle_, device, &transform);
+        const vr::EVROverlayError error = overlay->SetOverlayTransformTrackedDeviceRelative(panelHandle_, device, &panelTransform_);
         if (checkOverlay("SetOverlayTransformTrackedDeviceRelative", error)) {
             attachedDevice_ = device;
             transformDirty_ = false;
@@ -444,9 +432,9 @@ void VrOverlay::logFacingCheck(const Config& config) const {
     }
 }
 
-VrEvents VrOverlay::pollEvents(bool includeSystem) {
-    VrEvents result;
-    if (!connected_) return result;
+void VrOverlay::pollEvents(VrEvents& result, bool includeSystem) {
+    result.clear();
+    if (!connected_) return;
     vr::VREvent_t event {};
     if (includeSystem) {
         while (vr::VRSystem()->PollNextEvent(&event, sizeof(event))) {
@@ -493,7 +481,6 @@ VrEvents VrOverlay::pollEvents(bool includeSystem) {
         std::fprintf(stderr, "[VR] SteamVR から終了の知らせが来ました\n");
         vr::VRSystem()->AcknowledgeQuit_Exiting();
     }
-    return result;
 }
 
 bool VrOverlay::steamVrAlive() const {

@@ -82,7 +82,7 @@ public:
     /**
      * 開いてあるファイルを読み直して値を返す。CPU 使用率は前回との差から出すので初回は NaN。
      * 重いものは間隔をあけて実際に読み、あいだは前回の値を返す:
-     * 電力・直通回線・GPU 使用率は 2 秒おき、バッテリー・iio の温度は 5 秒おき（GPU 使用率の fd 探しは 10 秒おき）。
+     * 電力・直通回線・GPU 使用率は 2 秒おき、バッテリー・iio の温度は 5 秒おき（GPU 使用率の fd 探しは 30 秒おき）。
      * @return 読み取り結果
      */
     SensorSample read();
@@ -94,6 +94,8 @@ public:
     std::string describe() const;
 
 private:
+    friend struct SensorsTestAccess;
+
     /** 開いたままにする読み取り専用ファイル。 */
     struct Source {
         std::string path;
@@ -134,6 +136,7 @@ private:
 
     std::vector<uint64_t> prevBusy_;   ///< /proc/stat の前回値（[0] が全体、以降コアごと）
     std::vector<uint64_t> prevTotal_;
+    std::vector<uint64_t> currentBusy_, currentTotal_;  ///< 次の読み取りにも領域を再利用する
 
     /**
      * ファイルを読み取り専用で開いて Source を作る。

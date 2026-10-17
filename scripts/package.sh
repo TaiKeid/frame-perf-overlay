@@ -19,7 +19,7 @@ sh vendor/frame-updater/verify.sh
 
 # 開発用の build/ とは別のフォルダで、Release でビルドし直す（テストは開発用の build/ で ctest する。ここでは作らない）
 cmake -G Ninja -S . -B "$build_dir" -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF
-cmake --build "$build_dir" --clean-first
+cmake --build "$build_dir"
 
 version="$("$build_dir/$name" --version | awk '{print $2}')"
 if [[ -z "$version" || "$version" == "unknown" ]]; then

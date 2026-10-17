@@ -5,7 +5,6 @@
 
 #include <cstdio>
 #include <cstring>
-#include <sstream>
 #include <vector>
 
 namespace {
@@ -17,11 +16,16 @@ constexpr VkFormat kFormat = VK_FORMAT_R8G8B8A8_UNORM;
  * @param text 拡張名の並び
  * @return 拡張名の一覧
  */
-std::vector<std::string> splitNames(const std::string& text) {
+std::vector<std::string> splitNames(const char* text) {
     std::vector<std::string> names;
-    std::istringstream in(text);
-    std::string name;
-    while (in >> name) names.push_back(name);
+    constexpr const char* whitespace = " \t\r\n\f\v";
+    while (*text != '\0') {
+        text += std::strspn(text, whitespace);
+        const size_t length = std::strcspn(text, whitespace);
+        if (length == 0) break;
+        names.emplace_back(text, length);
+        text += length;
+    }
     return names;
 }
 
@@ -35,6 +39,7 @@ std::vector<std::string> splitNames(const std::string& text) {
 std::vector<std::string> filterSupported(const std::vector<std::string>& wanted,
                                          const std::vector<VkExtensionProperties>& available, const char* kind) {
     std::vector<std::string> result;
+    result.reserve(wanted.size());
     for (const auto& name : wanted) {
         bool found = false;
         for (const auto& ext : available) {
@@ -56,6 +61,7 @@ std::vector<std::string> filterSupported(const std::vector<std::string>& wanted,
  */
 std::vector<const char*> toPointers(const std::vector<std::string>& names) {
     std::vector<const char*> pointers;
+    pointers.reserve(names.size());
     for (const auto& name : names) pointers.push_back(name.c_str());
     return pointers;
 }

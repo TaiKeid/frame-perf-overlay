@@ -4,7 +4,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <fstream>
+#include <string_view>
 
 namespace {
 
@@ -15,19 +15,27 @@ namespace {
 std::string steamLanguage() {
     const char* home = std::getenv("HOME");
     if (home == nullptr || home[0] == '\0') return "";
-    std::ifstream file(std::string(home) + "/.steam/registry.vdf");
-    std::string line;
-    while (std::getline(file, line)) {
-        // 形式: <タブ>"language"<タブ>"japanese"
-        const std::string key = "\"language\"";
+    const std::string path = std::string(home) + "/.steam/registry.vdf";
+    FILE* file = std::fopen(path.c_str(), "r");
+    if (file == nullptr) return "";
+    char* buffer = nullptr;
+    size_t capacity = 0;
+    ssize_t count;
+    std::string language;
+    while ((count = ::getline(&buffer, &capacity, file)) >= 0) {
+        // 形式: <タブ>"language"<タブ>"japanese"。長い行も切らずに読む。
+        const std::string_view line(buffer, static_cast<size_t>(count));
+        constexpr std::string_view key = "\"language\"";
         const size_t at = line.find(key);
-        if (at == std::string::npos) continue;
+        if (at == std::string_view::npos) continue;
         const size_t open = line.find('"', at + key.size());
-        const size_t close = open == std::string::npos ? open : line.find('"', open + 1);
-        if (close == std::string::npos) return "";
-        return line.substr(open + 1, close - open - 1);
+        const size_t close = open == std::string_view::npos ? open : line.find('"', open + 1);
+        if (close != std::string_view::npos) language.assign(line.data() + open + 1, close - open - 1);
+        break;
     }
-    return "";
+    std::free(buffer);
+    std::fclose(file);
+    return language;
 }
 
 /**
@@ -37,7 +45,7 @@ std::string steamLanguage() {
 bool localeIsJapanese() {
     for (const char* name : {"LC_ALL", "LC_MESSAGES", "LANG"}) {
         const char* value = std::getenv(name);
-        if (value != nullptr && value[0] != '\0') return std::string(value).rfind("ja", 0) == 0;
+        if (value != nullptr && value[0] != '\0') return value[0] == 'j' && value[1] == 'a';
     }
     return false;
 }

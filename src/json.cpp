@@ -284,7 +284,7 @@ private:
 
 }  // namespace
 
-const JsonValue* JsonValue::get(const std::string& key) const {
+const JsonValue* JsonValue::get(std::string_view key) const {
     if (type != Type::Object) return nullptr;
     for (const auto& member : members) {
         if (member.first == key) return &member.second;

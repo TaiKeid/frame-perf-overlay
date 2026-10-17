@@ -6,6 +6,7 @@
 #include FT_FREETYPE_H
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdio>
 
@@ -65,28 +66,28 @@ void FontSet::load(const std::string& regularPath, const std::string& boldPath) 
     boldPath_ = boldPath;
 }
 
-double Pen::measure(const std::string& text, double size, bool isBold) const {
+double Pen::measure(const char* text, double size, bool isBold) const {
     cairo_set_font_face(cr, isBold ? fonts->bold() : fonts->regular());
     cairo_set_font_size(cr, size);
     cairo_text_extents_t extents;
-    cairo_text_extents(cr, text.c_str(), &extents);
+    cairo_text_extents(cr, text, &extents);
     return extents.x_advance;
 }
 
-double Pen::text(double x, double y, const std::string& text, double size, Color c, bool isBold,
+double Pen::text(double x, double y, const char* text, double size, Color c, bool isBold,
                  bool alignRight) const {
     color(c);
     if (alignRight) {
         const double width = measure(text, size, isBold);
         cairo_move_to(cr, x - width, y);
-        cairo_show_text(cr, text.c_str());
+        cairo_show_text(cr, text);
         return width;
     }
     // 左揃えは先に幅を測らず、描いたあとの現在位置から幅を出す（文字の組み立てを 1 回で済ませる）
     cairo_set_font_face(cr, isBold ? fonts->bold() : fonts->regular());
     cairo_set_font_size(cr, size);
     cairo_move_to(cr, x, y);
-    cairo_show_text(cr, text.c_str());
+    cairo_show_text(cr, text);
     double endX = x;
     double endY = y;
     cairo_get_current_point(cr, &endX, &endY);
@@ -108,7 +109,7 @@ void Pen::dot(double x, double y, Color c) const {
     cairo_fill(cr);
 }
 
-double fitSize(const Pen& pen, const std::string& text, double size, double minSize, double maxWidth, bool bold) {
+double fitSize(const Pen& pen, const char* text, double size, double minSize, double maxWidth, bool bold) {
     while (size > minSize && pen.measure(text, size, bold) > maxWidth) size -= 1;
     return size;
 }
@@ -117,7 +118,7 @@ double centerBaseline(double top, double h, double size) {
     return top + h / 2 + size * 0.36;
 }
 
-void textCentered(const Pen& pen, double cx, double baseline, const std::string& text, double size, Color c, bool bold) {
+void textCentered(const Pen& pen, double cx, double baseline, const char* text, double size, Color c, bool bold) {
     pen.text(cx - pen.measure(text, size, bold) / 2, baseline, text, size, c, bold);
 }
 
@@ -170,15 +171,12 @@ void drawDisc(cairo_t* cr, double cx, double cy, double r, Color c) {
 }
 
 void surfaceToRgba(cairo_surface_t* surface, std::vector<uint8_t>& out) {
-    // 乗算済みを戻す計算（c * 255 / a）を前もって表にしておく（割り算を画素ごとにしない）
-    static const std::vector<uint8_t> unpremultiply = [] {
-        std::vector<uint8_t> table(256 * 256);
-        for (uint32_t a = 0; a < 256; ++a) {
-            for (uint32_t c = 0; c < 256; ++c) {
-                const uint32_t value = a == 0 ? 0 : std::min<uint32_t>(255, (c * 255 + a / 2) / a);
-                table[a * 256 + c] = static_cast<uint8_t>(value);
-            }
-        }
+    // 24-bit reciprocal gives exactly (c * 255 + a / 2) / a for all 8-bit c/a.
+    // Unlike the former 64 KiB channel table, this is constant-initialized, needs no heap
+    // or startup divisions, and fits in 1 KiB. Opaque/transparent interiors skip it.
+    static constexpr auto reciprocal = [] {
+        std::array<uint32_t, 256> table {};
+        for (uint32_t a = 1; a < 256; ++a) table[a] = ((1u << 24) + a - 1) / a;
         return table;
     }();
 
@@ -195,10 +193,21 @@ void surfaceToRgba(cairo_surface_t* surface, std::vector<uint8_t>& out) {
             // cairo は乗算済みの ARGB（ネイティブエンディアンの 32bit）なので、戻して RGBA に並べ替える
             const uint32_t p = row[x];
             const uint32_t a = p >> 24;
-            const uint8_t* line = unpremultiply.data() + a * 256;
-            dst[0] = line[(p >> 16) & 0xFF];
-            dst[1] = line[(p >> 8) & 0xFF];
-            dst[2] = line[p & 0xFF];
+            if (a == 255) {
+                dst[0] = static_cast<uint8_t>(p >> 16);
+                dst[1] = static_cast<uint8_t>(p >> 8);
+                dst[2] = static_cast<uint8_t>(p);
+            } else if (a == 0) {
+                dst[0] = dst[1] = dst[2] = 0;
+            } else {
+                const auto channel = [a](uint32_t c) {
+                    const uint32_t value = static_cast<uint32_t>(((c * 255 + a / 2) * static_cast<uint64_t>(reciprocal[a])) >> 24);
+                    return static_cast<uint8_t>(std::min(255u, value));
+                };
+                dst[0] = channel((p >> 16) & 0xFF);
+                dst[1] = channel((p >> 8) & 0xFF);
+                dst[2] = channel(p & 0xFF);
+            }
             dst[3] = static_cast<uint8_t>(a);
             dst += 4;
         }

@@ -24,7 +24,6 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
-#include <fstream>
 #include <string>
 #include <thread>
 #include <vector>
@@ -682,12 +681,20 @@ bool acquireInstanceLock(int& lockFd, pid_t& holderPid) {
  * @return サービスとして動いていれば true
  */
 bool runningAsService() {
-    std::ifstream file("/proc/self/cgroup");
-    std::string line;
-    while (std::getline(file, line)) {
-        if (line.find("/frame-perf-overlay.service") != std::string::npos) return true;
+    FILE* file = std::fopen("/proc/self/cgroup", "r");
+    if (!file) return false;
+    char* line = nullptr;
+    size_t capacity = 0;
+    bool found = false;
+    while (::getline(&line, &capacity, file) >= 0) {
+        if (std::strstr(line, "/frame-perf-overlay.service")) {
+            found = true;
+            break;
+        }
     }
-    return false;
+    std::free(line);
+    std::fclose(file);
+    return found;
 }
 
 /**
@@ -792,6 +799,7 @@ int runOverlay(const Options& options) {
     bool userQuit = false;
     bool panelDrawnWithClock = true;  // 最後に描いた性能パネルが時計の行つきか（テクスチャは時計つきの高さで作る）
     unsigned loopCount = 0;  // --verbose 用: 前回の表示からループが回った回数
+    VrEvents events;  // マウス操作の配列はループをまたいで再利用する
     while (!gStopRequested && !userQuit) {
         ++loopCount;
         // 細かい周期（設定パネルが見えている間の 50ms）では設定パネルのイベントだけ見て、
@@ -818,7 +826,8 @@ int runOverlay(const Options& options) {
             }
         }
         // イベントは 0.5 秒おきと、設定パネルが見えている間だけ見る（手首のフェードのためだけに起きたときは IPC を増やさない）
-        const VrEvents events = slowCheck || settingsVisible ? vr.pollEvents(slowCheck) : VrEvents {};
+        if (slowCheck || settingsVisible) vr.pollEvents(events, slowCheck);
+        else events.clear();
         // SteamVR 自体の終了（VREvent_Quit）は今までどおり終了コード 0。
         // ダッシュボードのアイコンの「閉じる」（VREvent_OverlayClosed）はユーザーの終了なので、設定パネルの
         // 「アプリを終了」と同じく終了コード 3（systemd でも起動し直さない）
@@ -907,21 +916,22 @@ int runOverlay(const Options& options) {
         if (now >= nextPanel) {
             if (config.visible) {
                 // 処理ごとの CPU 時間（--verbose で表示）
-                const double c0 = cpuSeconds();
+                const bool logTiming = options.verbose && now - lastVerbose >= 2.0;
+                const double c0 = logTiming ? cpuSeconds() : 0.0;
                 const SensorSample sample = sensors.read();
-                const double c1 = cpuSeconds();
+                const double c1 = logTiming ? cpuSeconds() : 0.0;
                 const FrameStats frame = vr.readFrameStats();
                 // コントローラーの電池はゆっくりしか変わらないので 10 秒おき
                 if (lastControllers < 0 || now - lastControllers >= kControllerIntervalSec) {
                     lastControllers = now;
                     state.controllers = vr.readControllers();
                 }
-                const double c2 = cpuSeconds();
+                const double c2 = logTiming ? cpuSeconds() : 0.0;
                 state.update(now, sample, frame, true, config.graphSeconds);
                 renderer.render(state, config);
-                const double c3 = cpuSeconds();
+                const double c3 = logTiming ? cpuSeconds() : 0.0;
                 const std::vector<uint8_t>& rgba = renderer.toRgba();
-                const double c4 = cpuSeconds();
+                const double c4 = logTiming ? cpuSeconds() : 0.0;
                 // 見せる高さ（時計の行の有無）が変わるとき: 広がるときは先に広げ、狭まるときは新しい画像を送ってから
                 // 狭める。どちらも切り替えの間に見えるのは透明な 1 行ぶんだけで、描いた中身が切れて見えることはない
                 const int visibleHeight = renderer.visibleHeight();
@@ -929,8 +939,8 @@ int runOverlay(const Options& options) {
                 const bool sent = vr.submitPanel(rgba.data());
                 vr.setPanelVisibleHeight(visibleHeight);
                 panelDrawnWithClock = config.clockFormat != 0;
-                const double c5 = cpuSeconds();
-                if (options.verbose && now - lastVerbose >= 2.0) {
+                const double c5 = logTiming ? cpuSeconds() : 0.0;
+                if (logTiming) {
                     lastVerbose = now;
                     std::fprintf(stderr,
                                  "[値] ループ %u 回 | fps %s frames=%u GPU %s/%sms CPU %s/%sms 目標 %sms(%sHz) 再投影 %s%% 落ち %u | "

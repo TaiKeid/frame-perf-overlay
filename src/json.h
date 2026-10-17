@@ -2,6 +2,7 @@
 #pragma once
 
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -23,7 +24,7 @@ struct JsonValue {
      * @param key 探すキー
      * @return 見つかった値へのポインタ。オブジェクトでない・キーが無いときは nullptr
      */
-    const JsonValue* get(const std::string& key) const;
+    const JsonValue* get(std::string_view key) const;
 
     /** @return 数値なら true */
     bool isNumber() const { return type == Type::Number; }
