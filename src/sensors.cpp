@@ -390,7 +390,7 @@ double Sensors::monotonicSeconds() {
     return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) / 1e9;
 }
 
-SensorSample Sensors::read() {
+SensorSample Sensors::read(bool includePowerChannels) {
     SensorSample sample;
     long long v = 0;
 
@@ -450,7 +450,7 @@ SensorSample Sensors::read() {
     sample.throttleGpu = anyCooling(gpuCooling_);
     sample.powerMainW = cached_.powerMainW;
     sample.powerSumW = cached_.powerSumW;
-    sample.powerChannels = cached_.powerChannels;
+    if (includePowerChannels) sample.powerChannels = cached_.powerChannels;
     sample.batteryPct = cached_.batteryPct;
     sample.batteryVoltageV = cached_.batteryVoltageV;
     sample.batteryCurrentMa = cached_.batteryCurrentMa;

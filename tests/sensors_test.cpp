@@ -11,6 +11,13 @@
 
 struct SensorsTestAccess {
     static void setStat(Sensors& sensors, int fd) { sensors.procStat_.fd = ::dup(fd); }
+    static void setPowerSources(Sensors& sensors, int mainFd, int otherFd) {
+        sensors.powers_ = {{"", "max34417_10/vph", ::dup(mainFd)}, {"", "max34417_11/apc0", ::dup(otherFd)}};
+        // The test exercises only synthetic power files, never actual networking or /proc.
+        sensors.lastWifiRead_ = sensors.lastGpuRead_ = std::numeric_limits<double>::max();
+    }
+    static void refreshPower(Sensors& sensors) { sensors.lastPowerRead_ = -1; }
+    static void freezePower(Sensors& sensors) { sensors.lastPowerRead_ = std::numeric_limits<double>::max(); }
     static void setDescriptionSources(Sensors& sensors, int fd) {
         sensors.cpuTemps_ = {{"", "cpu0-thermal", -1}, {"", "cpu1-thermal", -1}};
         sensors.gpuTemps_ = {{"", "gpuss-thermal", -1}};
@@ -33,7 +40,7 @@ void check(bool ok, const char* message) {
 }
 
 void near(double actual, double expected) {
-    check(std::isfinite(actual) && std::fabs(actual - expected) < 1e-9, "unexpected CPU usage");
+    check(std::isfinite(actual) && std::fabs(actual - expected) < 1e-9, "unexpected sensor value");
 }
 
 struct StatFile {
@@ -130,6 +137,44 @@ void description() {
           "sensor description changed");
 }
 
+void optionalPowerChannels() {
+    StatFile mainRail, otherRail;
+    mainRail.write("12500000\n");
+    otherRail.write("3000000\n");
+    Sensors sensors;
+    SensorsTestAccess::setPowerSources(sensors, mainRail.fd, otherRail.fd);
+    auto sample = sensors.read();
+    near(sample.powerMainW, 12.5);
+    near(sample.powerSumW, 15.5);
+    check(sample.powerChannels.size() == 2, "default read omitted power diagnostics");
+
+    mainRail.write("13500000\n");
+    otherRail.write("3500000\n");
+    SensorsTestAccess::refreshPower(sensors);
+    sample = sensors.read(false);
+    near(sample.powerMainW, 13.5);
+    near(sample.powerSumW, 17);
+    check(sample.powerChannels.empty(), "aggregate-only read copied power diagnostics");
+
+    // Skipping the result copy must preserve the cache for subsequent diagnostic reads.
+    mainRail.write("14500000\n");
+    SensorsTestAccess::freezePower(sensors);
+    sample = sensors.read();
+    near(sample.powerMainW, 13.5);
+    near(sample.powerSumW, 17);
+    check(sample.powerChannels.size() == 2, "aggregate-only read discarded cached diagnostics");
+    check(sample.powerChannels[0].chip == "max34417_10" && sample.powerChannels[0].label == "vph",
+          "main power metadata changed");
+    near(sample.powerChannels[0].watts, 13.5);
+    check(sample.powerChannels[1].chip == "max34417_11" && sample.powerChannels[1].label == "apc0",
+          "other power metadata changed");
+    near(sample.powerChannels[1].watts, 3.5);
+    sample = sensors.read(false);
+    near(sample.powerMainW, 13.5);
+    near(sample.powerSumW, 17);
+    check(sample.powerChannels.empty(), "cached aggregate-only read copied power diagnostics");
+}
+
 }  // namespace
 
 int main() {
@@ -137,6 +182,7 @@ int main() {
         usageAndTopology();
         repeatedSamples();
         description();
+        optionalPowerChannels();
         std::puts("sensor CPU tests passed");
         return 0;
     } catch (const std::exception& error) {

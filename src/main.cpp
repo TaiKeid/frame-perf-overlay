@@ -524,7 +524,7 @@ int runDumpPng(const Options& options) {
     PanelRenderer renderer(fonts);
     PanelState state;
 
-    sensors.read();  // CPU 使用率の基準
+    sensors.read(false);  // CPU 使用率の基準（PNG には電力の各チャンネルは要らない）
     const double interval = config.updateIntervalMs / 1000.0;
     const double start = nowSeconds();
     do {
@@ -533,7 +533,7 @@ int runDumpPng(const Options& options) {
         const bool fake = options.fakeFrames || options.fakeWarnings || options.fakeFps > 0 || options.fakeThrottle;
         FrameStats frame = fake ? fakeFrameStats(t - start, options.fakeFps) : FrameStats();
         if (options.fakeThrottle) applyFakeThrottle(frame, t - start);
-        SensorSample sample = sensors.read();
+        SensorSample sample = sensors.read(false);
         if (options.fakeWarnings) applyFakeWarnings(sample);
         if (!options.fakeWifi.empty()) applyFakeWifi(sample, options.fakeWifi);
         state.update(t, sample, frame, fake, config.graphSeconds);
@@ -785,7 +785,7 @@ int runOverlay(const Options& options) {
         renderThumbnail(fonts, kThumbnailSize, thumbnail);
         vr.submitThumbnail(thumbnail.data(), kThumbnailSize);
     }
-    sensors.read();  // CPU 使用率の基準
+    sensors.read(false);  // CPU 使用率の基準（パネルには電力の各チャンネルは要らない）
 
     double nextPanel = nowSeconds();
     double lastVerbose = 0.0;
@@ -918,7 +918,7 @@ int runOverlay(const Options& options) {
                 // 処理ごとの CPU 時間（--verbose で表示）
                 const bool logTiming = options.verbose && now - lastVerbose >= 2.0;
                 const double c0 = logTiming ? cpuSeconds() : 0.0;
-                const SensorSample sample = sensors.read();
+                const SensorSample sample = sensors.read(false);
                 const double c1 = logTiming ? cpuSeconds() : 0.0;
                 const FrameStats frame = vr.readFrameStats();
                 // コントローラーの電池はゆっくりしか変わらないので 10 秒おき

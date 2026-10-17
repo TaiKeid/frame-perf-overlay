@@ -83,9 +83,10 @@ public:
      * 開いてあるファイルを読み直して値を返す。CPU 使用率は前回との差から出すので初回は NaN。
      * 重いものは間隔をあけて実際に読み、あいだは前回の値を返す:
      * 電力・直通回線・GPU 使用率は 2 秒おき、バッテリー・iio の温度は 5 秒おき（GPU 使用率の fd 探しは 30 秒おき）。
+     * @param includePowerChannels 個別の電力チャンネルも結果にコピーする（合計値と読み取り間隔は変わらない）
      * @return 読み取り結果
      */
-    SensorSample read();
+    SensorSample read(bool includePowerChannels = true);
 
     /**
      * 見つかったセンサーの一覧（--print 用）。
