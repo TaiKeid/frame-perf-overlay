@@ -296,3 +296,4 @@ MIT. See [LICENSE](LICENSE). `vendor/frame-updater/` is a copy of the author's o
 ## Credits
 
 - Wrist attachment, the clock and the tilt fade were contributed by [TaiKeid](https://github.com/TaiKeid) in [#1](https://github.com/sasaken1102r/frame-perf-overlay/pull/1).
+- The smaller release build, the faster RGBA conversion and the extra tests were contributed by [cinnacappu](https://github.com/cinnacappu) in [#2](https://github.com/sasaken1102r/frame-perf-overlay/pull/2).

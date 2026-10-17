@@ -296,3 +296,4 @@ MIT。[LICENSE](LICENSE) を参照してください。`vendor/frame-updater/` �
 ## 謝辞
 
 - 手首への固定・時計・傾けると消す機能は、[TaiKeid](https://github.com/TaiKeid) さんが [#1](https://github.com/sasaken1102r/frame-perf-overlay/pull/1) で作ってくれました。
+- リリースのビルドの軽量化・RGBA の変換の高速化・追加のテストは、[cinnacappu](https://github.com/cinnacappu) さんが [#2](https://github.com/sasaken1102r/frame-perf-overlay/pull/2) で作ってくれました。
